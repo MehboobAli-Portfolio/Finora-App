@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "scheme": "finora",
+    "name": "Finora",
+    "slug": "Finora",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/Images/finora_logo.png",
+
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+
+    "splash": {
+      "image": "./assets/Images/finora_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+
+    "ios": {
+      "supportsTablet": true
+    },
+
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/Images/finora_logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+
+    "web": {
+      "favicon": "./assets/Images/finora_logo.png"
+    }
+  }
+}
