@@ -8,7 +8,7 @@ Finora is an intelligent mobile app that helps users track expenses, achieve fin
 ## 🎯 Current Status
 🚧 **Under Active Development** 
 - Started: 11/11/2025
-- Target Completion: [3 months from now]
+- Target Completion: feb 2026
 - Current Phase: Setup & Foundation
 
 ## 🛠️ Tech Stack
