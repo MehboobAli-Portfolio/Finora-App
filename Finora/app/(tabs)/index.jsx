@@ -114,7 +114,22 @@ export default function HomeScreen() {
               <View style={styles.aiIconWrapper}>
                 <Ionicons name="sparkles" size={20} color="#8B5CF6" />
               </View>
-              <Text style={styles.aiText}>{dashboard.ai_suggestion}</Text>
+              <View style={{ flex: 1, gap: 10 }}>
+                {dashboard.ai_suggestion.split('\n\n').map((idea, idx) => {
+                  const parts = idea.split(': ');
+                  const title = parts.length > 1 ? parts[0] : '';
+                  const body = parts.length > 1 ? parts.slice(1).join(': ') : idea;
+                  return (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                      <Text style={{ fontSize: 14, color: '#4C1D95', fontWeight: '800', marginRight: 6 }}>•</Text>
+                      <Text style={styles.aiText}>
+                        {title ? <Text style={{fontWeight: '700'}}>{title}: </Text> : null}
+                        {body}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           </View>
         )}

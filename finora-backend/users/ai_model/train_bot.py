@@ -8,18 +8,57 @@ import sys
 
 # Ensure models can be imported when running as a standalone script
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from users.ml_model import FinoraNet
+from users.ai_model.ml_model import FinoraNet
 
 # Define financial intents manually for Finora
 intents = {
-    "greeting": ["hello", "hi", "hey", "good morning", "good evening", "what is up", "help me"],
-    "check_budget": ["what is my budget", "how much budget do I have left", "budget status", "am I broke", "how much can I spend", "spend limit"],
-    "check_balance": ["what is my balance", "show my money", "how much cash do I have", "account balance", "my net worth", "total balance"],
-    "check_spending": ["how much have I spent", "what are my expenses", "show my spending", "where did my money go", "expenses this month"],
-    "check_goals": ["what are my goals", "show my financial goals", "how far along am I", "target savings", "goal progress"],
-    "investing_advice": ["how to invest", "give me investing advice", "stocks", "bonds", "what should I invest in", "grow my money", "passive income"],
-    "debt_advice": ["how to pay off debt", "debt snowball", "credit card debt", "loans", "avalanche method", "getting out of debt"],
-    "unknown": ["asdfgh", "qwerty", "this makes no sense"] # helps with outlier padding
+    "greeting": [
+        "hello", "hi", "hey", "good morning", "good evening", "what is up", "help me",
+        "hey bot", "hello finora", "yo", "greetings", "howdy", "can you help me",
+        "i need assistance", "are you there", "hi there", "hello ai", "what's up"
+    ],
+    "check_budget": [
+        "what is my budget", "how much budget do I have left", "budget status", "am I broke", 
+        "how much can I spend", "spend limit", "can I afford this", "whats left in my budget", 
+        "show me my budget", "do i have budget left", "monthly budget", "did i overspend",
+        "budget limit", "what is my spending limit", "tell me my budget"
+    ],
+    "check_balance": [
+        "what is my balance", "show my money", "how much cash do I have", "account balance", 
+        "my net worth", "total balance", "how rich am i", "how much do i have in total",
+        "current balance", "show me my net worth", "total remaining money", "my checking balance"
+    ],
+    "check_spending": [
+        "how much have I spent", "what are my expenses", "show my spending", "where did my money go", 
+        "expenses this month", "total spent this month", "how much did I spend", "my expenditure",
+        "show me expenses", "recent expenses", "spending summary", "spent so far"
+    ],
+    "check_goals": [
+        "what are my goals", "show my financial goals", "how far along am I", "target savings", 
+        "goal progress", "did i reach my goals", "how are my goals doing", "savings goals",
+        "my active goals", "update on goals", "list my goals"
+    ],
+    "investing_advice": [
+        "how to invest", "give me investing advice", "stocks", "bonds", "what should I invest in", 
+        "grow my money", "passive income", "how to buy stocks", "best investments",
+        "index funds", "etf", "investing strategies", "how to build wealth", "start investing"
+    ],
+    "debt_advice": [
+        "how to pay off debt", "debt snowball", "credit card debt", "loans", "avalanche method", 
+        "getting out of debt", "eliminate debt", "pay down loans", "reduce my debt", 
+        "student loans", "how to get debt free"
+    ],
+    "market_status": [
+        "how is the stock market", "what are the stocks doing", "market update", "live market",
+        "is the market up", "spy price", "apple stock", "bitcoin price", "live stock data",
+        "current market trends", "what's green today", "is the market crashing"
+    ],
+    "improve_savings": [
+        "how do i save more", "i have no money", "teach me how to save", "i want to stop spending",
+        "reduce my expenses", "how to budget better", "frugal tips", "savings tips",
+        "how to build an emergency fund", "ways to cut back", "save money"
+    ],
+    "unknown": ["asdfgh", "qwerty", "this makes no sense", "afjaslfkj", "unknown word"]
 }
 
 def tokenize(sentence):
