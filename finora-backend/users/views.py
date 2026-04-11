@@ -76,13 +76,7 @@ def dashboard_view(request):
 
     balance = float(total_income) - float(expense_only)
 
-    # Generate daily AI suggestion based on context
-    ai_engine = FinoraAI(
-        user=user, balance=balance, income=total_income, expenses=expense_only,
-        budget=user.monthly_budget, goals_count=goals_count, completed_goals=completed_goals,
-        recent_transactions=recent_transactions
-    )
-    suggestion = ai_engine.generate_daily_suggestion()
+    active_goals = list(Goal.objects.filter(user=user, is_completed=False))
 
     return Response({
         'balance': balance,
@@ -93,8 +87,35 @@ def dashboard_view(request):
         'completed_goals': completed_goals,
         'monthly_budget': float(user.monthly_budget),
         'recent_transactions': recent_data,
-        'ai_suggestion': suggestion,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_insight_view(request):
+    """Returns only the AI generated insight so the main dashboard can load instantly without waiting for PyTorch."""
+    user = request.user
+    
+    from django.utils import timezone
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    expense_only = Expense.objects.filter(user=user, date__gte=month_start, transaction_type='expense').aggregate(total=Sum('amount'))['total'] or 0
+    total_income = Expense.objects.filter(user=user, date__gte=month_start, transaction_type='income').aggregate(total=Sum('amount'))['total'] or 0
+    balance = float(total_income) - float(expense_only)
+    goals_count = Goal.objects.filter(user=user).count()
+    completed_goals = Goal.objects.filter(user=user, is_completed=True).count()
+    active_goals = list(Goal.objects.filter(user=user, is_completed=False))
+
+    ai_engine = FinoraAI(
+        user=user, balance=balance, income=total_income, expenses=expense_only,
+        budget=user.monthly_budget, goals_count=goals_count, completed_goals=completed_goals,
+        recent_transactions=[], active_goals=active_goals
+    )
+    suggestion = ai_engine.generate_daily_suggestion()
+    
+    return Response({'ai_suggestion': suggestion})
+
 
 
 @api_view(['POST'])
@@ -114,11 +135,12 @@ def ai_chat_view(request):
     balance = float(total_income) - float(expenses_only)
     goals_count = Goal.objects.filter(user=user).count()
     completed_goals = Goal.objects.filter(user=user, is_completed=True).count()
+    active_goals = list(Goal.objects.filter(user=user, is_completed=False))
     
     ai_engine = FinoraAI(
         user=user, balance=balance, income=total_income, expenses=expenses_only,
         budget=user.monthly_budget, goals_count=goals_count, completed_goals=completed_goals,
-        recent_transactions=[]
+        recent_transactions=[], active_goals=active_goals
     )
     
     reply = ai_engine.process_chat_message(message)

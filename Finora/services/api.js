@@ -75,6 +75,7 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data) => api.patch('/auth/profile/', data),
   getDashboard: () => api.get('/auth/dashboard/'),
+  getDashboardInsight: () => api.get('/auth/dashboard-insight/'),
   chat: (data) => api.post('/auth/chat/', data),
 };
 
@@ -84,6 +85,9 @@ export const expensesAPI = {
   create: (data) => api.post('/expenses/', data),
   update: (id, data) => api.put(`/expenses/${id}/`, data),
   delete: (id) => api.delete(`/expenses/${id}/`),
+  scanReceipt: (formData) => api.post('/expenses/scan/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 };
 
 // Goals

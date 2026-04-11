@@ -51,7 +51,7 @@ class FinoraAI:
         cls._model.load_state_dict(torch.load(model_path, map_location=device))
         cls._model.eval()
         
-    def __init__(self, user, balance, income, expenses, budget, goals_count, completed_goals, recent_transactions):
+    def __init__(self, user, balance, income, expenses, budget, goals_count, completed_goals, recent_transactions, active_goals=None):
         FinoraAI.load_model()
         
         self.user = user
@@ -62,6 +62,7 @@ class FinoraAI:
         self.goals_count = goals_count
         self.completed_goals = completed_goals
         self.txs = recent_transactions
+        self.active_goals = active_goals or []
         self.market_data = get_market_data()
         
         # Calculate Finora Health Score (0-100)
@@ -81,43 +82,33 @@ class FinoraAI:
         self.health_score = max(0, min(100, int(score)))
 
     def generate_daily_suggestion(self):
-        """Generates 3 contextual ideas for the dashboard as a multi-line bulleted string."""
-        ideas = []
-        
-        # Idea 1: Spending & Budget
-        if self.budget <= 0:
-            ideas.append("Set a Budget: You haven't set a Monthly Budget yet. Setting one is the first step towards financial freedom.")
-        else:
-            percentage_spent = (self.expenses / self.budget) * 100
-            remaining = self.budget - self.expenses
-            if percentage_spent >= 100:
-                ideas.append(f"Budget Alert: You've exceeded your monthly limit by ${abs(remaining):,.2f}. Avoid non-essential spending.")
-            elif percentage_spent >= 80:
-                ideas.append(f"Spend Carefully: You have ${remaining:,.2f} left. You've burned through {percentage_spent:.0f}% of your budget.")
-            else:
-                ideas.append(f"Great job: You have ${remaining:,.2f} left in your budget. Keep maintaining this healthy rate.")
-
-        # Idea 2: Goals & Savings
-        if self.goals_count == 0:
-            ideas.append("Create a Goal: You have 0 active savings goals. Aim for a 3-month emergency fund.")
-        elif self.completed_goals == self.goals_count:
-            ideas.append(f"Amazing: You accomplished all {self.goals_count} of your goals! Set a new aspirational milestone.")
-        else:
-            ideas.append(f"Stay Focused: You are currently pursuing {self.goals_count} goals. Allocate surplus income to them immediately.")
-
-        # Idea 3: Market/Investments
+        """Generates 1 hyper-focused contextual idea for the dashboard based deeply on health score."""
         surplus = self.income - self.expenses
-        if self.market_data and surplus > 0:
-            spy_price = self.market_data.get('spy_price', 500)
-            btc_price = self.market_data.get('btc_price', 60000)
-            potential_spy = surplus / spy_price
-            ideas.append(f"Investing Opportunity: You have a monthly surplus of ${surplus:,.2f}! If you invest this consistently in the S&P 500 (currently ${spy_price:,.2f}), you could buy ~{potential_spy:.2f} shares a month. Historically, an 8% annual return on this surplus could drastically accelerate your financial goals compared to leaving it in a savings account. Alternatively, allocating a small percentage to crypto (Bitcoin is ~${btc_price:,.2f}) could offer high-growth potential.")
-        elif surplus <= 0 and self.income > 0:
-            ideas.append("Savings Alert: Your expenses are currently consuming your entire income! To reach long-term goals or buy assets like stocks and crypto, you must create a surplus. Try to reduce your discretionary spending by 15% this week.")
+        
+        if self.health_score < 40:
+            if self.budget <= 0:
+                return f"Health Score: {self.health_score}/100. Critical Action: You haven't set a Monthly Budget. Establishing one is mathematically proven to be the fastest way to get your finances on track."
+            if self.expenses > self.budget:
+                over = self.expenses - self.budget
+                return f"Health Score: {self.health_score}/100. Critical Alert: You are over budget by ${over:,.2f}. Avoid non-essential spending for the remainder of the month."
+            if surplus <= 0:
+                return f"Health Score: {self.health_score}/100. Savings Alert: Your expenses are currently consuming your entire income (${self.income:,.2f}). Try to reduce discretionary spending by 15% this week."
+                
+        elif self.health_score < 75:
+            if self.active_goals and surplus > 0:
+                goal = self.active_goals[0]
+                dist = float(goal.target_amount - goal.current_amount)
+                months = dist / surplus
+                return f"Health Score: {self.health_score}/100. Track Forecast: With your current surplus of ${surplus:,.2f}/month, if you focus entirely on your '{goal.title}' goal, you will complete it in just {months:.1f} months!"
+            return f"Health Score: {self.health_score}/100. Doing well: You have a surplus of ${surplus:,.2f}. Consider opening a savings goal to direct this cash effectively, like an Emergency Fund."
+            
         else:
-            ideas.append("Build Wealth: Compound interest accelerates wealth. Review your weekly transaction logs to eliminate shadow subscriptions.")
-
-        return "\n\n".join(ideas)
+            if self.active_goals and surplus > 0:
+                return f"Health Score: {self.health_score}/100. Excellent momentum! You have ${surplus:,.2f}/mo extra cash. If you divide this equally among your {len(self.active_goals)} active goals, they will grow on autopilot."
+            elif self.market_data and surplus > 0:
+                spy_price = self.market_data.get('spy_price', 500)
+                return f"Health Score: {self.health_score}/100. Wealth Building: With a massive surplus of ${surplus:,.2f}/mo, consider dollar-cost averaging into an index fund like SPY (currently ${spy_price:,.2f}) to drastically accelerate compound growth over the next 5 years."
+            return f"Health Score: {self.health_score}/100. Financial Independence unlocked! Keep optimizing your strategy."
 
     def _extract_ticker(self, message):
         # Allow explicit $TICKER search
@@ -220,12 +211,26 @@ class FinoraAI:
             
         elif intent == "check_goals":
             surplus = self.income - self.expenses
-            base_msg = f"You are pursuing {self.goals_count} financial goals and have successfully completed {self.completed_goals} of them! "
-            if self.goals_count == 0: return "You are currently tracking 0 financial goals. A balanced approach to wealth starts with setting a target for an Emergency Fund right now."
+            base_msg = f"You are actively pursuing {len(self.active_goals)} financial goal(s) and have successfully completed {self.completed_goals} milestone(s)!\n\n"
+            
+            if len(self.active_goals) == 0:
+                return base_msg + "A balanced approach to wealth starts with setting a specific target, like an Emergency Fund right now."
+
             if surplus > 0:
-                base_msg += f"\n\nAt your current surplus of ${surplus:,.2f}/mo, you have fantastic momentum to crush the rest of your targets! Every dollar saved accelerates your timeline."
+                base_msg += f"With your current monthly surplus of ${surplus:,.2f}, here are your live forecasts if you allocate your extra cash optimally:\n\n"
+                split_surplus = surplus / len(self.active_goals)
+                for g in self.active_goals:
+                    rem = float(g.target_amount - g.current_amount)
+                    if rem <= 0: continue
+                    months = rem / split_surplus
+                    base_msg += f"🎯 **{g.title}**: Remaining ${rem:,.2f}. By directing your equal share (${split_surplus:,.2f}/mo) toward this, you'll reach it in **{months:.1f} months**!\n"
             else:
-                base_msg += f"\n\nRight now, your expenses are limiting your ability to save. Try to identify one discretionary area to cut back on this week to help you hit your next goal."
+                base_msg += f"Currently, your expenses are limiting your ability to save. Let's look at your remaining targets:\n\n"
+                for g in self.active_goals:
+                    rem = float(g.target_amount - g.current_amount)
+                    base_msg += f"- {g.title}: ${rem:,.2f} left.\n"
+                base_msg += "\nTry to cut back your discretionary spending this week to unlock savings momentum."
+                
             return base_msg
             
         elif intent == "investing_advice":
@@ -265,5 +270,17 @@ class FinoraAI:
             
         elif intent == "improve_savings":
             return "To save more immediately: 1. Cancel unused subscriptions. 2. Pre-allocate 20% of your income to savings the second you get paid. 3. Cook meals at home to drastically lower food expenses."
+            
+        elif intent == "tax_advice":
+            return "Tax efficiency is key to wealth. Maximize pre-tax contributions to 401ks or Traditional IRAs to lower your taxable income. For taxable accounts, hold investments for over a year to benefit from lower Long-Term Capital Gains rates. Consider tax-loss harvesting to offset gains!"
+            
+        elif intent == "crypto_advice":
+            return "Crypto (like Bitcoin/Ethereum) can be a high-growth, albeit highly volatile, component of a modern portfolio. We recommend capping high-risk alternative assets like crypto at a maximum of 5-10% of your total net worth to prevent extreme volatility from derailing your goals."
+            
+        elif intent == "retirement_advice":
+            return "For retirement, taking advantage of employer matches in a 401k is basically free money! Aim to invest at least 15% of your gross income towards retirement across vehicles like a Roth IRA (tax-free growth) or Traditional 401k. The power of compounding makes starting early your biggest advantage."
+            
+        elif intent == "real_estate":
+            return "Real estate is a fantastic tangible asset for building equity and generating rental cash flow. Before purchasing a property, ensure you have a dedicated 20% down payment saved in a high-yield account, and a 3-6 month emergency fund intact. Be aware of hidden costs like property taxes and maintenance!"
             
         return "I'm still learning! Ask me about your 'budget', 'balance', 'goals', or ask for general advice on 'investing'."

@@ -7,7 +7,7 @@ import os
 import sys
 
 # Ensure models can be imported when running as a standalone script
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from users.ai_model.ml_model import FinoraNet
 
 # Define financial intents manually for Finora
@@ -57,6 +57,23 @@ intents = {
         "how do i save more", "i have no money", "teach me how to save", "i want to stop spending",
         "reduce my expenses", "how to budget better", "frugal tips", "savings tips",
         "how to build an emergency fund", "ways to cut back", "save money"
+    ],
+    "tax_advice": [
+        "how to file taxes", "tax deductions", "lower my taxes", "tax brackets",
+        "what are write offs", "how do taxes work", "tax planning", "minimize taxes",
+        "capital gains tax", "tax returns"
+    ],
+    "crypto_advice": [
+        "should i buy bitcoin", "what is ethereum", "crypto investing", "cryptocurrency",
+        "buy crypto", "blockchain", "is crypto safe", "dogecoin", "solana"
+    ],
+    "retirement_advice": [
+        "how to retire early", "what is a 401k", "roth ira", "traditional ira",
+        "retirement planning", "how much do i need to retire", "fire movement", "pension"
+    ],
+    "real_estate": [
+        "buy a house", "mortgage rates", "real estate investing", "should i rent or buy",
+        "down payment", "buying property", "housing market", "rental property"
     ],
     "unknown": ["asdfgh", "qwerty", "this makes no sense", "afjaslfkj", "unknown word"]
 }
@@ -118,11 +135,11 @@ class ChatDataset(Dataset):
 
 # 2. Hyperparameters
 batch_size = 8
-hidden_size = 16
+hidden_size = 64
 output_size = len(tags)
 input_size = len(all_words)
-learning_rate = 0.005
-num_epochs = 1500
+learning_rate = 0.002
+num_epochs = 2000
 
 dataset = ChatDataset()
 train_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
