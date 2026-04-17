@@ -5,25 +5,53 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from .models import Expense
 from .serializers import ExpenseSerializer
-import easyocr
 import re
 
 READER = None
+_OCR_UNAVAILABLE = False
+
+
+def _get_receipt_reader():
+    """Lazy-load EasyOCR so Django can start without easyocr installed."""
+    global READER, _OCR_UNAVAILABLE
+    if _OCR_UNAVAILABLE:
+        return None
+    if READER is None:
+        try:
+            import easyocr
+        except ImportError:
+            _OCR_UNAVAILABLE = True
+            return None
+        try:
+            READER = easyocr.Reader(['en'])
+        except Exception:
+            _OCR_UNAVAILABLE = True
+            return None
+    return READER
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def scan_receipt_view(request):
-    global READER
-    if READER is None:
-        READER = easyocr.Reader(['en'])
-        
+    reader = _get_receipt_reader()
+    if reader is None:
+        return Response(
+            {
+                'error': (
+                    'Receipt scanning needs the easyocr package. '
+                    'Install it in your virtualenv: pip install easyocr'
+                )
+            },
+            status=503,
+        )
+
     file_obj = request.FILES.get('receipt')
     if not file_obj:
         return Response({'error': 'No receipt image provided'}, status=400)
     
     image_bytes = file_obj.read()
-    results = READER.readtext(image_bytes, detail=0)
+    results = reader.readtext(image_bytes, detail=0)
     raw_text = " ".join(results).lower()
     
     amounts = re.findall(r'\$?\s?(\d+\.\d{2})', raw_text)

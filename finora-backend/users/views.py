@@ -136,13 +136,41 @@ def ai_chat_view(request):
     goals_count = Goal.objects.filter(user=user).count()
     completed_goals = Goal.objects.filter(user=user, is_completed=True).count()
     active_goals = list(Goal.objects.filter(user=user, is_completed=False))
-    
-    ai_engine = FinoraAI(
-        user=user, balance=balance, income=total_income, expenses=expenses_only,
-        budget=user.monthly_budget, goals_count=goals_count, completed_goals=completed_goals,
-        recent_transactions=[], active_goals=active_goals
+
+    category_rows = list(
+        Expense.objects.filter(
+            user=user, date__gte=month_start, transaction_type="expense"
+        )
+        .values("category")
+        .annotate(total=Sum("amount"))
+        .order_by("-total")[:5]
     )
-    
+    spending_by_category = [
+        {"category": r["category"], "total": float(r["total"] or 0)} for r in category_rows
+    ]
+
+    recent_qs = Expense.objects.filter(user=user).order_by("-date")[:12]
+    from expenses.serializers import ExpenseSerializer
+    recent_serialized = ExpenseSerializer(recent_qs, many=True).data
+
+    inv_qs = Investment.objects.filter(user=user).order_by("-purchase_date")[:15]
+    from investments.serializers import InvestmentSerializer
+    inv_serialized = InvestmentSerializer(inv_qs, many=True).data
+
+    ai_engine = FinoraAI(
+        user=user,
+        balance=balance,
+        income=total_income,
+        expenses=expenses_only,
+        budget=user.monthly_budget,
+        goals_count=goals_count,
+        completed_goals=completed_goals,
+        recent_transactions=recent_serialized,
+        active_goals=active_goals,
+        spending_by_category=spending_by_category,
+        investments=inv_serialized,
+    )
+
     reply = ai_engine.process_chat_message(message)
     return Response({'reply': reply})
 
