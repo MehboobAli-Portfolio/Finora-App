@@ -75,7 +75,7 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data) => api.patch('/auth/profile/', data),
   getDashboard: () => api.get('/auth/dashboard/'),
-  chat: (data) => api.post('/auth/chat/', data),
+  chat: (data) => api.post('/ai_coach/chat/', data),
 };
 
 // Expenses

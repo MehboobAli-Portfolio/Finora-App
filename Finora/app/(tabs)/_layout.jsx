@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TAB_COLOR = '#2563EB';
@@ -8,7 +8,7 @@ const INACTIVE = '#9CA3AF';
 
 function TabIcon({ name, focused }) {
   return (
-    <View style={[styles.iconWrapper, focused && styles.iconWrapperActive]}>
+    <View style={[{width: 44,height: 32,alignItems: 'center',justifyContent: 'center',borderRadius: 12}, focused && {backgroundColor: '#EFF6FF'}]}>
       <Ionicons
         name={focused ? name : `${name}-outline`}
         size={24}
@@ -78,33 +78,28 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="salary-reality"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon name="person" focused={focused} />,
+          title: 'Salary',
+          tabBarIcon: ({ focused }) => <TabIcon name="wallet" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="ai"
         options={{
           title: 'Coach',
-          tabBarStyle: { display: 'none' },
           tabBarIcon: ({ focused }) => <TabIcon name="sparkles" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          href: null,
         }}
       />
     </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
-  iconWrapper: { 
-    width: 44, 
-    height: 32, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderRadius: 12 
-  },
-  iconWrapperActive: { 
-    backgroundColor: '#EFF6FF' 
-  },
-});
+

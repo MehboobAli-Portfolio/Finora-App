@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,41 +49,41 @@ export default function AddExpenseScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={{flex: 1,backgroundColor: '#F7F9FC'}} edges={['top']}>
       <View style={{ flex: 1 }} >
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <View style={{flexDirection: 'row',alignItems: 'center',justifyContent: 'space-between',paddingHorizontal: 16,paddingVertical: 14,backgroundColor: '#FFFFFF',borderBottomWidth: 1,borderBottomColor: '#F3F4F6'}}>
+          <TouchableOpacity onPress={() => router.back()} style={{width: 40,height: 40,borderRadius: 12,backgroundColor: '#F3F4F6',justifyContent: 'center',alignItems: 'center'}}>
             <Ionicons name="arrow-back" size={24} color="#111827" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Transaction</Text>
+          <Text style={{fontSize: 18,fontWeight: '800',color: '#111827'}}>Add Transaction</Text>
           <View style={{ width: 40 }} />
         </View>
 
         <KeyboardAwareScrollView enableOnAndroid={true} extraScrollHeight={20} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
           {/* Type Toggle */}
-          <View style={styles.toggleRow}>
+          <View style={{flexDirection: 'row',backgroundColor: '#F3F4F6',borderRadius: 14,padding: 4,marginBottom: 24}}>
             <TouchableOpacity
-              style={[styles.toggleBtn, type === 'expense' && styles.toggleBtnActive]}
+              style={[{flex: 1,flexDirection: 'row',alignItems: 'center',justifyContent: 'center',gap: 6,paddingVertical: 12,borderRadius: 10}, type === 'expense' && {backgroundColor: '#EF4444'}]}
               onPress={() => setType('expense')}
             >
               <Ionicons name="arrow-up-circle" size={18} color={type === 'expense' ? '#FFFFFF' : '#9CA3AF'} />
-              <Text style={[styles.toggleText, type === 'expense' && styles.toggleTextActive]}>Expense</Text>
+              <Text style={[{fontSize: 15,fontWeight: '700',color: '#9CA3AF'}, type === 'expense' && {color: '#FFFFFF'}]}>Expense</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.toggleBtn, styles.toggleIncome, type === 'income' && styles.toggleBtnActiveIncome]}
+              style={[{flex: 1,flexDirection: 'row',alignItems: 'center',justifyContent: 'center',gap: 6,paddingVertical: 12,borderRadius: 10}, {}, type === 'income' && {backgroundColor: '#10B981'}]}
               onPress={() => setType('income')}
             >
               <Ionicons name="arrow-down-circle" size={18} color={type === 'income' ? '#FFFFFF' : '#9CA3AF'} />
-              <Text style={[styles.toggleText, type === 'income' && styles.toggleTextActive]}>Income</Text>
+              <Text style={[{fontSize: 15,fontWeight: '700',color: '#9CA3AF'}, type === 'income' && {color: '#FFFFFF'}]}>Income</Text>
             </TouchableOpacity>
           </View>
 
           {/* Amount */}
-          <View style={styles.amountContainer}>
-            <Text style={styles.amountSymbol}>$</Text>
+          <View style={{flexDirection: 'row',alignItems: 'center',justifyContent: 'center',marginBottom: 28}}>
+            <Text style={{fontSize: 40,fontWeight: '800',color: '#111827',marginRight: 4}}>$</Text>
             <TextInput
-              style={styles.amountInput}
+              style={{fontSize: 56,fontWeight: '800',color: '#111827',minWidth: 120}}
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
@@ -93,10 +93,10 @@ export default function AddExpenseScreen() {
           </View>
 
           {/* Title */}
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Title</Text>
+          <View style={{marginBottom: 18}}>
+            <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Title</Text>
             <TextInput
-              style={styles.input}
+              style={{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,fontSize: 15,color: '#111827'}}
               value={title}
               onChangeText={setTitle}
               placeholder="e.g. Coffee at Starbucks"
@@ -105,10 +105,10 @@ export default function AddExpenseScreen() {
           </View>
 
           {/* Date */}
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Date</Text>
+          <View style={{marginBottom: 18}}>
+            <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Date</Text>
             <TextInput
-              style={styles.input}
+              style={{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,fontSize: 15,color: '#111827'}}
               value={date}
               onChangeText={setDate}
               placeholder="YYYY-MM-DD"
@@ -117,29 +117,29 @@ export default function AddExpenseScreen() {
           </View>
 
           {/* Category */}
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Category</Text>
-            <View style={styles.categoriesGrid}>
+          <View style={{marginBottom: 18}}>
+            <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Category</Text>
+            <View style={{flexDirection: 'row',flexWrap: 'wrap',gap: 10}}>
               {CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[styles.catItem, category === cat.id && { borderColor: cat.color, borderWidth: 2 }]}
+                  style={[{width: '30%',alignItems: 'center',padding: 10,backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',gap: 4}, category === cat.id && { borderColor: cat.color, borderWidth: 2 }]}
                   onPress={() => setCategory(cat.id)}
                 >
-                  <View style={[styles.catIcon, { backgroundColor: `${cat.color}18` }]}>
+                  <View style={[{width: 38,height: 38,borderRadius: 10,justifyContent: 'center',alignItems: 'center'}, { backgroundColor: `${cat.color}18` }]}>
                     <Ionicons name={cat.icon} size={20} color={cat.color} />
                   </View>
-                  <Text style={styles.catLabel}>{cat.label}</Text>
+                  <Text style={{fontSize: 11,fontWeight: '600',color: '#374151',textAlign: 'center'}}>{cat.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
           {/* Description */}
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Note (optional)</Text>
+          <View style={{marginBottom: 18}}>
+            <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Note (optional)</Text>
             <TextInput
-              style={[styles.input, { height: 80, textAlignVertical: 'top', paddingTop: 12 }]}
+              style={[{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,fontSize: 15,color: '#111827'}, { height: 80, textAlignVertical: 'top', paddingTop: 12 }]}
               value={description}
               onChangeText={setDescription}
               placeholder="Add a note..."
@@ -149,14 +149,14 @@ export default function AddExpenseScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: type === 'expense' ? '#EF4444' : '#10B981' }]}
+            style={[{borderRadius: 16,height: 56,flexDirection: 'row',alignItems: 'center',justifyContent: 'center',gap: 10,marginTop: 8,marginBottom: 20,shadowOffset: {width: 0,height: 4},shadowOpacity: 0.25,shadowRadius: 8,elevation: 6}, { backgroundColor: type === 'expense' ? '#EF4444' : '#10B981' }]}
             onPress={handleSubmit}
             disabled={loading}
           >
             {loading ? <ActivityIndicator color="#FFF" /> : (
               <>
                 <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                <Text style={styles.submitText}>Save Transaction</Text>
+                <Text style={{fontSize: 17,fontWeight: '700',color: '#FFFFFF'}}>Save Transaction</Text>
               </>
             )}
           </TouchableOpacity>
@@ -166,47 +166,4 @@ export default function AddExpenseScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F9FC' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
-  },
-  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  toggleRow: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 14, padding: 4, marginBottom: 24 },
-  toggleBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 12, borderRadius: 10,
-  },
-  toggleIncome: {},
-  toggleBtnActive: { backgroundColor: '#EF4444' },
-  toggleBtnActiveIncome: { backgroundColor: '#10B981' },
-  toggleText: { fontSize: 15, fontWeight: '700', color: '#9CA3AF' },
-  toggleTextActive: { color: '#FFFFFF' },
-  amountContainer: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 28,
-  },
-  amountSymbol: { fontSize: 40, fontWeight: '800', color: '#111827', marginRight: 4 },
-  amountInput: { fontSize: 56, fontWeight: '800', color: '#111827', minWidth: 120 },
-  field: { marginBottom: 18 },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: {
-    backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB',
-    paddingHorizontal: 16, height: 50, fontSize: 15, color: '#111827',
-  },
-  categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  catItem: {
-    width: '30%', alignItems: 'center', padding: 10, backgroundColor: '#FFFFFF',
-    borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB', gap: 4,
-  },
-  catIcon: { width: 38, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  catLabel: { fontSize: 11, fontWeight: '600', color: '#374151', textAlign: 'center' },
-  submitBtn: {
-    borderRadius: 16, height: 56, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 10, marginTop: 8, marginBottom: 20,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 6,
-  },
-  submitText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-});
+
