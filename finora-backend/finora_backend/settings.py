@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'corsheaders',
     # Local apps
     'users',
+    'ai_coach',
     'expenses',
     'goals',
     'investments',
