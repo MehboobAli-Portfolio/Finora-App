@@ -1,7 +1,7 @@
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, TouchableOpacity,
   RefreshControl, ActivityIndicator, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -127,7 +127,7 @@ export default function GoalsScreen() {
         <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 20 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadGoals(); }} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadGoals(); }} tintColor="#2563EB" />}
         >
           {goals.length === 0 ? (
             <View style={{alignItems: 'center',paddingVertical: 60}}>
@@ -137,15 +137,23 @@ export default function GoalsScreen() {
               <TouchableOpacity style={{backgroundColor: '#2563EB',paddingHorizontal: 24,paddingVertical: 12,borderRadius: 12}} onPress={() => router.push('/add-goal')}>
                 <Text style={{color: '#FFFFFF',fontWeight: '700',fontSize: 14}}>+ Add Goal</Text>
               </TouchableOpacity>
-            </View> : goals.map(goal => <TouchableOpacity key={goal.id} activeOpacity={0.8} onPress={() => router.push({
-        pathname: '/edit-goal',
-        params: {
-          ...goal
-        }
-      })}>
+            </View>
+          ) : (
+            goals.map(goal => (
+              <TouchableOpacity 
+                key={goal.id} 
+                activeOpacity={0.8} 
+                onPress={() => router.push({
+                  pathname: '/edit-goal',
+                  params: { ...goal }
+                })}
+              >
                 <GoalCard goal={goal} onDelete={() => handleDelete(goal.id)} onUpdate={loadGoals} />
-              </TouchableOpacity>)}
-        </KeyboardAwareScrollView>}
+              </TouchableOpacity>
+            ))
+          )}
+        </KeyboardAwareScrollView>
+      )}
 
       {/* Floating Action Button */}
       <TouchableOpacity 
