@@ -75,8 +75,8 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data) => api.patch('/auth/profile/', data),
   getDashboard: () => api.get('/auth/dashboard/'),
-  getDashboardInsight: () => api.get('/auth/dashboard-insight/'),
-  chat: (data) => api.post('/auth/chat/', data),
+  getDashboardInsight: () => api.get('/ai/insight/'),
+  chat: (data) => api.post('/ai/chat/', data),
 };
 
 // Expenses
@@ -104,6 +104,11 @@ export const investmentsAPI = {
   create: (data) => api.post('/investments/', data),
   update: (id, data) => api.put(`/investments/${id}/`, data),
   delete: (id) => api.delete(`/investments/${id}/`),
+};
+
+// Salary Reality
+export const salaryAPI = {
+  analyse: (data) => api.post('/salary/analyse/', data),
 };
 
 export default api;

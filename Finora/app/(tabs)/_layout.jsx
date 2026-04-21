@@ -79,11 +79,11 @@ export default function TabLayout() {
         focused
       }) => <TabIcon name="trending-up" focused={focused} />
     }} />
-      <Tabs.Screen name="profile" options={{
-      title: 'Profile',
+      <Tabs.Screen name="salary-reality" options={{
+      title: 'Salary',
       tabBarIcon: ({
         focused
-      }) => <TabIcon name="person" focused={focused} />
+      }) => <TabIcon name="cash" focused={focused} />
     }} />
       <Tabs.Screen name="ai" options={{
       title: 'Coach',
@@ -93,6 +93,10 @@ export default function TabLayout() {
       tabBarIcon: ({
         focused
       }) => <TabIcon name="sparkles" focused={focused} />
+    }} />
+      <Tabs.Screen name="profile" options={{
+      title: 'Profile',
+      href: null
     }} />
     </Tabs>;
 }

@@ -102,19 +102,26 @@ export default function HomeScreen() {
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-          <View>
-            <Text style={{
-            fontSize: 14,
-            color: 'rgba(255,255,255,0.8)',
-            fontWeight: '500'
-          }}>Good day, 👋</Text>
-            <Text style={{
-            fontSize: 22,
-            fontWeight: '800',
-            color: '#FFFFFF',
-            marginTop: 2
-          }}>{user?.full_name || user?.username || 'Welcome'}</Text>
-          </View>
+          <TouchableOpacity 
+            onPress={() => router.push('/(tabs)/profile')}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
+          >
+            <View style={{
+              width: 50, height: 50, borderRadius: 25, 
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              justifyContent: 'center', alignItems: 'center'
+            }}>
+              <Ionicons name="person" size={28} color="#FFFFFF" />
+            </View>
+            <View>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' }}>
+                Good day, 👋
+              </Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', marginTop: 1 }}>
+                {user?.full_name || user?.username || 'Welcome'}
+              </Text>
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity style={{
           width: 44,
           height: 44,

@@ -1,6 +1,13 @@
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import React, { useState, useCallback } from 'react';
+<<<<<<< HEAD
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from 'react-native';
+=======
+import {
+  View, Text, ScrollView, TouchableOpacity,
+  RefreshControl, ActivityIndicator, Alert
+} from 'react-native';
+>>>>>>> frontend-dev
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,6 +81,7 @@ export default function ExpensesScreen() {
   };
   const totalIncome = expenses.filter(e => e.transaction_type === 'income').reduce((s, e) => s + parseFloat(e.amount), 0);
   const totalExpense = expenses.filter(e => e.transaction_type === 'expense').reduce((s, e) => s + parseFloat(e.amount), 0);
+<<<<<<< HEAD
   return <SafeAreaView style={{
     flex: 1,
     backgroundColor: '#F7F9FC'
@@ -157,10 +165,33 @@ export default function ExpensesScreen() {
           fontWeight: '800',
           color: '#EF4444'
         }}>{fmt(totalExpense)}</Text>
+=======
+
+  return (
+    <SafeAreaView style={{flex: 1,backgroundColor: '#F7F9FC'}} edges={['top']}>
+      {/* Header */}
+      <View style={{backgroundColor: '#2563EB',paddingHorizontal: 24,paddingVertical: 18,flexDirection: 'row',justifyContent: 'space-between',alignItems: 'center'}}>
+        <Text style={{fontSize: 22,fontWeight: '800',color: '#FFFFFF'}}>Transactions</Text>
+        <TouchableOpacity style={{width: 40,height: 40,borderRadius: 12,backgroundColor: 'rgba(255,255,255,0.2)',justifyContent: 'center',alignItems: 'center'}} onPress={() => router.push('/add-expense')}>
+          <Ionicons name="add" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Summary */}
+      <View style={{flexDirection: 'row',margin: 16,gap: 12}}>
+        <View style={[{flex: 1,backgroundColor: '#FFFFFF',borderRadius: 14,padding: 14,borderLeftWidth: 4,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 6,elevation: 3}, { borderLeftColor: '#10B981' }]}>
+          <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '600',marginBottom: 4,textTransform: 'uppercase'}}>Income</Text>
+          <Text style={[{fontSize: 18,fontWeight: '800'}, { color: '#10B981' }]}>{fmt(totalIncome)}</Text>
+        </View>
+        <View style={[{flex: 1,backgroundColor: '#FFFFFF',borderRadius: 14,padding: 14,borderLeftWidth: 4,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 6,elevation: 3}, { borderLeftColor: '#EF4444' }]}>
+          <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '600',marginBottom: 4,textTransform: 'uppercase'}}>Expenses</Text>
+          <Text style={[{fontSize: 18,fontWeight: '800'}, { color: '#EF4444' }]}>{fmt(totalExpense)}</Text>
+>>>>>>> frontend-dev
         </View>
       </View>
 
       {/* Filter tabs */}
+<<<<<<< HEAD
       <View style={{
       flexDirection: 'row',
       paddingHorizontal: 16,
@@ -182,11 +213,22 @@ export default function ExpensesScreen() {
           color: '#6B7280',
           ...(activeFilter === f && { color: '#FFFFFF' })
         }}>
+=======
+      <View style={{flexDirection: 'row',paddingHorizontal: 16,gap: 8,marginBottom: 4}}>
+        {FILTERS.map(f => (
+          <TouchableOpacity
+            key={f}
+            style={[{paddingHorizontal: 18,paddingVertical: 9,borderRadius: 20,backgroundColor: '#FFFFFF',borderWidth: 1.5,borderColor: '#E5E7EB'}, activeFilter === f && {backgroundColor: '#2563EB',borderColor: '#2563EB'}]}
+            onPress={() => setActiveFilter(f)}
+          >
+            <Text style={[{fontSize: 13,fontWeight: '600',color: '#6B7280'}, activeFilter === f && {color: '#FFFFFF'}]}>
+>>>>>>> frontend-dev
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </Text>
           </TouchableOpacity>)}
       </View>
 
+<<<<<<< HEAD
       {loading ? <ActivityIndicator style={{
       marginTop: 40
     }} color="#2563EB" /> : <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{
@@ -224,6 +266,23 @@ export default function ExpensesScreen() {
             fontWeight: '700',
             fontSize: 14
           }}>+ Add Transaction</Text>
+=======
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color="#2563EB" />
+      ) : (
+        <KeyboardAwareScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadExpenses(); }} tintColor="#2563EB" />}
+        >
+          {expenses.length === 0 ? (
+            <View style={{alignItems: 'center',paddingVertical: 60}}>
+              <Ionicons name="receipt-outline" size={48} color="#D1D5DB" />
+              <Text style={{fontSize: 18,fontWeight: '700',color: '#374151',marginTop: 16,marginBottom: 8}}>No transactions</Text>
+              <Text style={{fontSize: 14,color: '#9CA3AF',textAlign: 'center',marginBottom: 24}}>Add your first transaction to start tracking</Text>
+              <TouchableOpacity style={{backgroundColor: '#2563EB',paddingHorizontal: 24,paddingVertical: 12,borderRadius: 12}} onPress={() => router.push('/add-expense')}>
+                <Text style={{color: '#FFFFFF',fontWeight: '700',fontSize: 14}}>+ Add Transaction</Text>
+>>>>>>> frontend-dev
               </TouchableOpacity>
             </View> : expenses.map(exp => <ExpenseCard key={exp.id} exp={exp} onDelete={() => handleDelete(exp.id)} />)}
         </KeyboardAwareScrollView>}
@@ -259,6 +318,7 @@ function ExpenseCard({
   const isIncome = exp.transaction_type === 'income';
   const icon = CATEGORY_ICONS[exp.category] || 'ellipsis-horizontal';
   const color = CATEGORY_COLORS[exp.category] || '#9CA3AF';
+<<<<<<< HEAD
   return <View style={{
     flexDirection: 'row',
     alignItems: 'center',
@@ -320,3 +380,27 @@ function ExpenseCard({
       </View>
     </View>;
 }
+=======
+  return (
+    <View style={{flexDirection: 'row',alignItems: 'center',backgroundColor: '#FFFFFF',borderRadius: 14,padding: 14,marginBottom: 10,gap: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 1},shadowOpacity: 0.04,shadowRadius: 4,elevation: 2}}>
+      <View style={[{width: 44,height: 44,borderRadius: 12,justifyContent: 'center',alignItems: 'center'}, { backgroundColor: `${color}18` }]}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <View style={{flex: 1}}>
+        <Text style={{fontSize: 14,fontWeight: '600',color: '#111827'}}>{exp.title}</Text>
+        <Text style={{fontSize: 12,color: '#9CA3AF',marginTop: 2,textTransform: 'capitalize'}}>{exp.category} · {exp.date}</Text>
+      </View>
+      <View style={{alignItems: 'flex-end',gap: 6}}>
+        <Text style={[{fontSize: 14,fontWeight: '700'}, { color: isIncome ? '#10B981' : '#EF4444' }]}>
+          {isIncome ? '+' : '-'}{fmt(exp.amount)}
+        </Text>
+        <TouchableOpacity onPress={onDelete} style={{padding: 4}}>
+          <Ionicons name="trash-outline" size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+
+>>>>>>> frontend-dev
