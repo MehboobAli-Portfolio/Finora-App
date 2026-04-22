@@ -16,7 +16,15 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
 
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://192.168.18.15:8000',
+]
+
+
 INSTALLED_APPS = [
+    'users',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -28,13 +36,13 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     # Local apps
-    'users',
     'expenses',
     'goals',
     'investments',
     'salary_reality',
     'ai_coach',
 ]
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
