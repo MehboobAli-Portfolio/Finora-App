@@ -1,23 +1,54 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Platform } from 'react-native';
+import { View, Platform, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const TAB_COLOR = '#2563EB';
 const INACTIVE = '#9CA3AF';
+const TAB_ICONS = {
+  index: require('../../assets/icons/home.png'),
+  expenses: require('../../assets/icons/expense.png'),
+  goals: require('../../assets/icons/goal.png'),
+  invest: require('../../assets/icons/invest.png'),
+  'salary-reality': require('../../assets/icons/salary.png'),
+  ai: require('../../assets/icons/ai.png'),
+};
 function TabIcon({
   name,
-  focused
+  focused,
+  route
 }) {
-  return <View style={{
-    width: 44,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    ...(focused && { backgroundColor: '#EFF6FF' })
-  }}>
-      <Ionicons name={focused ? name : `${name}-outline`} size={24} color={focused ? TAB_COLOR : INACTIVE} />
-    </View>;
+  const iconSource = TAB_ICONS[route] || TAB_ICONS.index;
+  
+  return (
+    <View style={{
+      width: 56,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      <View style={{
+        width: 42,
+        height: 42,
+        borderRadius: 10,
+        backgroundColor: '#FFFFFF',
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+        <Image 
+          source={iconSource} 
+          style={{ 
+            width: 42, 
+            height: 42, 
+            backgroundColor: '#FFFFFF',
+            opacity: 1,
+            transform: [{ scale: 1.3 }]
+          }} 
+          resizeMode="contain"
+        />
+      </View>
+    </View>
+  );
 }
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -25,7 +56,7 @@ export default function TabLayout() {
     headerShown: false,
     tabBarStyle: {
       position: 'absolute',
-      bottom: Platform.OS === 'android' ? Math.max(insets.bottom + 16, 16) : Math.max(insets.bottom, 24),
+      bottom: Math.max(insets.bottom, 12),
       left: 16,
       right: 16,
       height: 68,
@@ -53,46 +84,47 @@ export default function TabLayout() {
     },
     tabBarActiveTintColor: TAB_COLOR,
     tabBarInactiveTintColor: INACTIVE,
-    tabBarHideOnKeyboard: true
+    tabBarHideOnKeyboard: true,
+    tabBarVisibilityAnimationConfig: {
+      show: { animation: 'timing', config: { duration: 0 } },
+      hide: { animation: 'timing', config: { duration: 0 } },
+    }
   }}>
       <Tabs.Screen name="index" options={{
       title: 'Home',
       tabBarIcon: ({
         focused
-      }) => <TabIcon name="home" focused={focused} />
+      }) => <TabIcon focused={focused} route="index" />
     }} />
       <Tabs.Screen name="expenses" options={{
       title: 'Expenses',
       tabBarIcon: ({
         focused
-      }) => <TabIcon name="receipt" focused={focused} />
+      }) => <TabIcon focused={focused} route="expenses" />
     }} />
       <Tabs.Screen name="goals" options={{
       title: 'Goals',
       tabBarIcon: ({
         focused
-      }) => <TabIcon name="flag" focused={focused} />
+      }) => <TabIcon focused={focused} route="goals" />
     }} />
       <Tabs.Screen name="invest" options={{
       title: 'Invest',
       tabBarIcon: ({
         focused
-      }) => <TabIcon name="trending-up" focused={focused} />
+      }) => <TabIcon focused={focused} route="invest" />
     }} />
       <Tabs.Screen name="salary-reality" options={{
       title: 'Salary',
       tabBarIcon: ({
         focused
-      }) => <TabIcon name="cash" focused={focused} />
+      }) => <TabIcon focused={focused} route="salary-reality" />
     }} />
       <Tabs.Screen name="ai" options={{
       title: 'Coach',
-      tabBarStyle: {
-        display: 'none'
-      },
       tabBarIcon: ({
         focused
-      }) => <TabIcon name="sparkles" focused={focused} />
+      }) => <TabIcon focused={focused} route="ai" />
     }} />
       <Tabs.Screen name="profile" options={{
       title: 'Profile',
