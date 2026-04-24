@@ -28,7 +28,9 @@ export default function AiScreen() {
         toValue: 1,
         duration: 300,
         useNativeDriver: false,
-      }).start();
+      }).start(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      });
     });
     const hideSubscription = Keyboard.addListener(hideEvent, (e) => {
       Animated.timing(animatedPadding, {
@@ -137,12 +139,18 @@ export default function AiScreen() {
       </LinearGradient>
 
       <View style={{ flex: 1 }}>
-        <FlatList
+        <Animated.FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
-          contentContainerStyle={{ padding: 20, paddingBottom: 150 }}
+          contentContainerStyle={{ 
+            padding: 20, 
+            paddingBottom: animatedPadding.interpolate({
+              inputRange: [0, 1],
+              outputRange: [220, keyboardHeight + 100]
+            }) 
+          }}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />
