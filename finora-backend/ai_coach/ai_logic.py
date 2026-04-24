@@ -2,6 +2,7 @@ import json
 import torch
 import os
 import re
+import time
 import yfinance as yf
 
 from expenses.models import Expense
@@ -18,20 +19,37 @@ TORCH_MIN_MARGIN = 0.04
 _CATEGORY_LABELS = dict(Expense.CATEGORY_CHOICES)
 
 
+_MARKET_CACHE = None
+_MARKET_CACHE_TIME = 0
+_CACHE_EXPIRY = 300 # 5 minutes
+
 def get_market_data():
+    global _MARKET_CACHE, _MARKET_CACHE_TIME
+    now = time.time()
+    
+    # Return cached data if valid
+    if _MARKET_CACHE and (now - _MARKET_CACHE_TIME < _CACHE_EXPIRY):
+        return _MARKET_CACHE
+
     try:
+        # Use a smaller timeout for yfinance if possible, or just accept the background fetch
         spy = yf.Ticker("SPY").fast_info
         btc = yf.Ticker("BTC-USD").fast_info
         qqq = yf.Ticker("QQQ").fast_info
         gold = yf.Ticker("GC=F").fast_info
-        return {
+        
+        data = {
             "spy_price": spy.last_price,
             "btc_price": btc.last_price,
             "qqq_price": qqq.last_price,
             "gold_price": gold.last_price,
         }
+        
+        _MARKET_CACHE = data
+        _MARKET_CACHE_TIME = now
+        return data
     except Exception:
-        return None
+        return _MARKET_CACHE # Return stale cache on failure rather than None if possible
 
 
 class FinoraAI:
@@ -62,6 +80,12 @@ class FinoraAI:
         cls._model.load_state_dict(torch.load(model_path, map_location=device))
         cls._model.eval()
 
+    @property
+    def market_data(self):
+        if self._market_data is None:
+            self._market_data = get_market_data()
+        return self._market_data
+
     def __init__(
         self,
         user,
@@ -89,7 +113,7 @@ class FinoraAI:
         self.active_goals = active_goals or []
         self.spending_by_category = spending_by_category or []
         self.investments = investments or []
-        self.market_data = get_market_data()
+        self._market_data = None # Lazy loaded
 
         score = 100
         surplus = self.income - self.expenses
