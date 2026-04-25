@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-finora-dev-key-change-in-production-2024')
 
@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     # Local apps
-    'expenses',
+    'transactions',
     'goals',
     'investments',
     'salary_reality',
@@ -55,7 +55,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'config.urls'
+ROOT_URLCONF = 'urls'
 
 TEMPLATES = [
     {
@@ -73,7 +73,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'config.wsgi.application'
+WSGI_APPLICATION = 'wsgi.application'
 
 DATABASES = {
     'default': {

@@ -1,39 +1,54 @@
+import uuid
 from django.db import models
 from django.conf import settings
 
 
 class Goal(models.Model):
-    GOAL_TYPES = [
+    CATEGORY_CHOICES = [
         ('savings', 'Savings'),
+        ('investment', 'Investment'),
         ('emergency', 'Emergency Fund'),
-        ('vacation', 'Vacation'),
-        ('education', 'Education'),
-        ('home', 'Home Purchase'),
-        ('car', 'Car Purchase'),
-        ('retirement', 'Retirement'),
-        ('debt', 'Debt Payoff'),
-        ('other', 'Other'),
+        ('travel', 'Travel'),
+    ]
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('paused', 'Paused'),
     ]
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='goals')
-    title = models.CharField(max_length=200)
-    goal_type = models.CharField(max_length=20, choices=GOAL_TYPES, default='savings')
+    name = models.CharField(max_length=200)
     target_amount = models.DecimalField(max_digits=12, decimal_places=2)
     current_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    target_date = models.DateField(null=True, blank=True)
-    description = models.TextField(blank=True)
-    is_completed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    deadline = models.DateField(null=True, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
 
     class Meta:
-        ordering = ['-created_at']
-
-    @property
-    def progress_percentage(self):
-        if self.target_amount == 0:
-            return 0
-        return min(100, round((float(self.current_amount) / float(self.target_amount)) * 100, 1))
+        ordering = ['-deadline']
 
     def __str__(self):
-        return f"{self.user.email} - {self.title}"
+        return f"{self.user.email} - {self.name}"
+
+
+class GoalDeposit(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='deposits')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    note = models.TextField(null=True, blank=True)
+    deposited_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new:
+            # Update goal current_amount
+            self.goal.current_amount = float(self.goal.current_amount) + float(self.amount)
+            if self.goal.current_amount >= self.goal.target_amount:
+                self.goal.status = 'completed'
+            self.goal.save()
+
+    def __str__(self):
+        return f"Deposit {self.amount} for {self.goal.name}"

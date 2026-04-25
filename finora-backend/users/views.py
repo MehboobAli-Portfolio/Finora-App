@@ -6,10 +6,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
 
-from expenses.models import Expense
+from transactions.models import Transaction
 from goals.models import Goal
-from investments.models import Investment
-from expenses.serializers import ExpenseSerializer
+from investments.models import Holding
+from transactions.serializers import TransactionSerializer
 
 from .serializers import RegisterSerializer, UserSerializer
 
@@ -52,33 +52,36 @@ def dashboard_view(request):
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    total_income = Expense.objects.filter(
-        user=user, date__gte=month_start, transaction_type='income'
+    # Transaction aggregation (replaces old Expense queries)
+    total_income = Transaction.objects.filter(
+        user=user, date__gte=month_start, txn_type='income'
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    expense_only = Expense.objects.filter(
-        user=user, date__gte=month_start, transaction_type='expense'
+    total_expenses = Transaction.objects.filter(
+        user=user, date__gte=month_start, txn_type='expense'
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    total_investments = Investment.objects.filter(
-        user=user
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    # Portfolio value
+    holdings = Holding.objects.filter(user=user)
+    portfolio_value = sum(h.market_value for h in holdings)
 
-    goals_count     = Goal.objects.filter(user=user).count()
-    completed_goals = Goal.objects.filter(user=user, is_completed=True).count()
+    # Goals summary
+    goals_count = Goal.objects.filter(user=user).count()
+    completed_goals = Goal.objects.filter(user=user, status='completed').count()
 
-    recent_transactions = Expense.objects.filter(user=user).order_by('-date')[:5]
-    recent_data = ExpenseSerializer(recent_transactions, many=True).data
+    # Recent transactions
+    recent_transactions = Transaction.objects.filter(user=user).order_by('-date')[:5]
+    recent_data = TransactionSerializer(recent_transactions, many=True).data
 
-    balance = float(total_income) - float(expense_only)
+    balance = float(total_income) - float(total_expenses)
 
     return Response({
-        'balance':           balance,
-        'total_income':      float(total_income),
-        'total_expenses':    float(expense_only),
-        'total_investments': float(total_investments),
-        'goals_count':       goals_count,
-        'completed_goals':   completed_goals,
-        'monthly_budget':    float(user.monthly_budget),
+        'balance': balance,
+        'total_income': float(total_income),
+        'total_expenses': float(total_expenses),
+        'portfolio_value': portfolio_value,
+        'goals_count': goals_count,
+        'completed_goals': completed_goals,
+        'monthly_budget': float(user.monthly_budget),
         'recent_transactions': recent_data,
     })

@@ -6,11 +6,11 @@ from rest_framework import status
 from django.utils import timezone
 from django.db.models import Sum
 
-from expenses.models import Expense
-from expenses.serializers import ExpenseSerializer
+from transactions.models import Transaction
+from transactions.serializers import TransactionSerializer
 from goals.models import Goal
-from investments.models import Investment
-from investments.serializers import InvestmentSerializer
+from investments.serializers import HoldingSerializer
+from investments.models import Holding
 
 from .ai_logic import FinoraAI
 
@@ -27,22 +27,22 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
     month_start = _get_month_start()
 
     expense_only = (
-        Expense.objects.filter(user=user, date__gte=month_start, transaction_type='expense')
+        Transaction.objects.filter(user=user, date__gte=month_start, txn_type='expense')
         .aggregate(total=Sum('amount'))['total'] or 0
     )
     total_income = (
-        Expense.objects.filter(user=user, date__gte=month_start, transaction_type='income')
+        Transaction.objects.filter(user=user, date__gte=month_start, txn_type='income')
         .aggregate(total=Sum('amount'))['total'] or 0
     )
     balance       = float(total_income) - float(expense_only)
     goals_count   = Goal.objects.filter(user=user).count()
-    completed     = Goal.objects.filter(user=user, is_completed=True).count()
-    active_goals  = list(Goal.objects.filter(user=user, is_completed=False))
+    completed     = Goal.objects.filter(user=user, status='completed').count()
+    active_goals  = list(Goal.objects.filter(user=user, status='active'))
 
     spending_by_category = []
     if include_categories:
         rows = (
-            Expense.objects.filter(user=user, date__gte=month_start, transaction_type='expense')
+            Transaction.objects.filter(user=user, date__gte=month_start, txn_type='expense')
             .values('category')
             .annotate(total=Sum('amount'))
             .order_by('-total')[:5]
@@ -53,13 +53,13 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
 
     recent_transactions = []
     if include_recent:
-        qs = Expense.objects.filter(user=user).order_by('-date')[:12]
-        recent_transactions = ExpenseSerializer(qs, many=True).data
+        qs = Transaction.objects.filter(user=user).order_by('-date')[:12]
+        recent_transactions = TransactionSerializer(qs, many=True).data
 
     investments = []
     if include_investments:
-        inv_qs = Investment.objects.filter(user=user).order_by('-purchase_date')[:15]
-        investments = InvestmentSerializer(inv_qs, many=True).data
+        inv_qs = Holding.objects.filter(user=user).order_by('-last_updated')[:15]
+        investments = HoldingSerializer(inv_qs, many=True).data
 
     return FinoraAI(
         user=user,
