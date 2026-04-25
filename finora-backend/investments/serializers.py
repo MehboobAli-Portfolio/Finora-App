@@ -1,12 +1,23 @@
 from rest_framework import serializers
-from .models import Investment
+from .models import Asset, Holding, PriceHistory
 
 
-class InvestmentSerializer(serializers.ModelSerializer):
-    return_amount = serializers.ReadOnlyField()
-    return_percentage = serializers.ReadOnlyField()
+class AssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = '__all__'
+
+
+class HoldingSerializer(serializers.ModelSerializer):
+    asset_details = AssetSerializer(source='asset', read_only=True)
 
     class Meta:
-        model = Investment
+        model = Holding
         fields = '__all__'
-        read_only_fields = ('user', 'created_at', 'updated_at', 'return_amount', 'return_percentage')
+        read_only_fields = ('id', 'user', 'last_updated')
+
+
+class PriceHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PriceHistory
+        fields = '__all__'
