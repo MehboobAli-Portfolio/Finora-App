@@ -13,6 +13,7 @@ from investments.serializers import HoldingSerializer
 from investments.models import Holding
 
 from .ai_logic import FinoraAI
+from .models import AIConversation, AIMessage
 
 
 def _get_month_start():
@@ -98,13 +99,41 @@ def insight_view(request):
 def chat_view(request):
     """
     POST /api/ai/chat/
-    Body: { "message": "..." }
-    Returns: { "reply": "..." }
+    Body: { "message": "...", "conversation_id": "optional-uuid" }
+    Returns: { "reply": "...", "intent": "...", "conversation_id": "..." }
     Full context: categories, recent transactions, investments.
     """
-    message = request.data.get('message', '').strip()
-    if not message:
+    message_text = request.data.get('message', '').strip()
+    if not message_text:
         return Response({'error': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    conversation_id = request.data.get('conversation_id')
+    
+    if conversation_id:
+        try:
+            conversation = AIConversation.objects.get(id=conversation_id, user=request.user)
+        except AIConversation.DoesNotExist:
+            return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        conversation = AIConversation.objects.create(
+            user=request.user,
+            title=message_text[:50] + "..." if len(message_text) > 50 else message_text
+        )
+
+    # Save User Message
+    user_msg = AIMessage.objects.create(
+        conversation=conversation,
+        user=request.user,
+        role='user',
+        content=message_text
+    )
+
+    # Fetch last 15 messages for context
+    recent_messages = conversation.messages.order_by('-created_at')[:15]
+    chat_history = [
+        {"role": m.role, "content": m.content, "intent": m.intent}
+        for m in reversed(recent_messages)
+    ]
 
     try:
         engine = _build_ai_engine(
@@ -113,7 +142,54 @@ def chat_view(request):
             include_categories=True,
             include_recent=True,
         )
-        reply = engine.process_chat_message(message)
-        return Response({'reply': reply})
+        reply, intent, entities = engine.process_chat_message(message_text, chat_history=chat_history)
+        
+        # Save Assistant Reply
+        AIMessage.objects.create(
+            conversation=conversation,
+            user=request.user,
+            role='assistant',
+            content=reply,
+            intent=intent,
+            entities=entities
+        )
+        
+        return Response({
+            'reply': reply,
+            'intent': intent,
+            'entities': entities,
+            'conversation_id': conversation.id
+        })
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def chat_history_view(request):
+    """
+    GET /api/ai/chat/history/
+    Returns all user conversations with their messages.
+    """
+    conversations = AIConversation.objects.filter(user=request.user).order_by('-last_active')
+    data = []
+    for conv in conversations:
+        messages = conv.messages.order_by('created_at')
+        msg_data = [
+            {
+                'id': msg.id,
+                'role': msg.role,
+                'content': msg.content,
+                'intent': msg.intent,
+                'entities': msg.entities,
+                'created_at': msg.created_at
+            } for msg in messages
+        ]
+        data.append({
+            'id': conv.id,
+            'title': conv.title,
+            'started_at': conv.started_at,
+            'last_active': conv.last_active,
+            'messages': msg_data
+        })
+    return Response(data)
