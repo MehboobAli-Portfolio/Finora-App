@@ -180,6 +180,16 @@ class FinoraAI:
             return matches[0]
         return None
 
+    def _extract_amount(self, message):
+        # Extract things like $500, 500 dollars, 500.00
+        match = re.search(r'\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:dollars|bucks)?\b', message, re.IGNORECASE)
+        if match:
+            try:
+                return float(match.group(1).replace(',', ''))
+            except ValueError:
+                return None
+        return None
+
     def _category_breakdown_text(self):
         if not self.spending_by_category:
             return ""
@@ -206,8 +216,17 @@ class FinoraAI:
             lines.append(f"- {d} {title} ({label}) {sign}${amt:,.2f}")
         return "\nRecent activity from your ledger:\n" + "\n".join(lines)
 
-    def process_chat_message(self, message: str) -> str:
-        """Classifies intent (sklearn TF-IDF if available, else PyTorch BoW) and fills templates."""
+    def process_chat_message(self, message: str, chat_history: list = None) -> tuple:
+        """Classifies intent, extracts entities, and returns (response, intent, entities)."""
+        entities = {}
+        
+        ticker = self._extract_ticker(message)
+        if ticker:
+            entities['ticker'] = ticker
+
+        amount = self._extract_amount(message)
+        if amount is not None:
+            entities['amount'] = amount
 
         ticker = self._extract_ticker(message)
         if ticker:
@@ -222,7 +241,9 @@ class FinoraAI:
                     f"~${price:,.2f} ({change:+.2f}% today).\n\n"
                     f"If you believe in the long-term fundamentals of {ticker}, maintaining a balanced portfolio "
                     "approach and using Dollar Cost Averaging with your available surplus can be highly effective. "
-                    "How else can I help?"
+                    "How else can I help?",
+                    "market_status",
+                    entities
                 )
             except Exception:
                 pass
@@ -271,10 +292,19 @@ class FinoraAI:
         if intent == "unknown":
             return (
                 "Could you rephrase that? I'm highly trained to discuss your budget, goals, current balance, "
-                "spending habits, portfolio, and live market trends!"
+                "spending habits, portfolio, and live market trends!",
+                intent,
+                entities
             )
 
-        return self._generate_response(intent)
+        # Basic context awareness from history
+        if chat_history and len(chat_history) > 0:
+            last_msg = chat_history[-1]
+            if "market_status" in last_msg.get("intent", "") and intent == "investing_advice":
+                # slightly context-aware response modification
+                pass
+
+        return (self._generate_response(intent), intent, entities)
 
     def _fallback_keyword_matcher(self, text):
         if any(w in text for w in ["portfolio", "holdings", "my investments", "my stocks", "positions"]):
