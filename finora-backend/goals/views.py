@@ -1,24 +1,25 @@
-from rest_framework import generics, filters
+from rest_framework import generics, filters, status
 from rest_framework.permissions import IsAuthenticated
-from .models import Goal
-from .serializers import GoalSerializer
+from rest_framework.response import Response
+from .models import Goal, GoalDeposit
+from .serializers import GoalSerializer, GoalDepositSerializer
 
 
 class GoalListCreateView(generics.ListCreateAPIView):
     serializer_class = GoalSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['title', 'goal_type']
+    search_fields = ['name', 'category']
     ordering_fields = ['created_at', 'target_date', 'target_amount']
 
     def get_queryset(self):
         queryset = Goal.objects.filter(user=self.request.user)
-        goal_type = self.request.query_params.get('type')
-        is_completed = self.request.query_params.get('completed')
-        if goal_type:
-            queryset = queryset.filter(goal_type=goal_type)
-        if is_completed is not None:
-            queryset = queryset.filter(is_completed=is_completed.lower() == 'true')
+        category = self.request.query_params.get('category')
+        status = self.request.query_params.get('status')
+        if category:
+            queryset = queryset.filter(category=category)
+        if status:
+            queryset = queryset.filter(status=status)
         return queryset
 
     def perform_create(self, serializer):
@@ -31,3 +32,15 @@ class GoalDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Goal.objects.filter(user=self.request.user)
+
+
+class GoalDepositListCreateView(generics.ListCreateAPIView):
+    serializer_class = GoalDepositSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return GoalDeposit.objects.filter(user=self.request.user, goal_id=self.kwargs['goal_id'])
+
+    def perform_create(self, serializer):
+        goal = generics.get_object_or_404(Goal, id=self.kwargs['goal_id'], user=self.request.user)
+        serializer.save(user=self.request.user, goal=goal)

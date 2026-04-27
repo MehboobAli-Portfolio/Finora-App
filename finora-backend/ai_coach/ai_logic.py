@@ -5,7 +5,7 @@ import re
 import time
 import yfinance as yf
 
-from expenses.models import Expense
+from transactions.models import Transaction
 
 from .ai_model.ml_model import FinoraNet
 from .ai_model.intent_sklearn import predict_intent_sklearn, sklearn_intent_available
@@ -16,7 +16,7 @@ SKLEARN_MIN_MARGIN = 0.06
 TORCH_MIN_CONF = 0.22
 TORCH_MIN_MARGIN = 0.04
 
-_CATEGORY_LABELS = dict(Expense.CATEGORY_CHOICES)
+_CATEGORY_LABELS = dict(Transaction.CATEGORY_CHOICES)
 
 
 _MARKET_CACHE = None
@@ -148,7 +148,7 @@ class FinoraAI:
                 goal = self.active_goals[0]
                 dist = float(goal.target_amount - goal.current_amount)
                 months = dist / surplus
-                return f"Health Score: {self.health_score}/100. Track Forecast: With your current surplus of ${surplus:,.2f}/month, if you focus entirely on your '{goal.title}' goal, you will complete it in just {months:.1f} months!"
+                return f"Health Score: {self.health_score}/100. Track Forecast: With your current surplus of ${surplus:,.2f}/month, if you focus entirely on your '{goal.name}' goal, you will complete it in just {months:.1f} months!"
             return f"Health Score: {self.health_score}/100. Doing well: You have a surplus of ${surplus:,.2f}. Consider opening a savings goal to direct this cash effectively, like an Emergency Fund."
 
         else:
@@ -369,14 +369,14 @@ class FinoraAI:
                         continue
                     months = rem / split_surplus
                     base_msg += (
-                        f"🎯 **{g.title}**: Remaining ${rem:,.2f}. By directing your equal share "
+                        f"🎯 **{g.name}**: Remaining ${rem:,.2f}. By directing your equal share "
                         f"(${split_surplus:,.2f}/mo) toward this, you'll reach it in **{months:.1f} months**!\n"
                     )
             else:
                 base_msg += "Currently, your expenses are limiting your ability to save. Let's look at your remaining targets:\n\n"
                 for g in self.active_goals:
                     rem = float(g.target_amount - g.current_amount)
-                    base_msg += f"- {g.title}: ${rem:,.2f} left.\n"
+                    base_msg += f"- {g.name}: ${rem:,.2f} left.\n"
                 base_msg += "\nTry to cut back your discretionary spending this week to unlock savings momentum."
 
             return base_msg

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  ActivityIndicator, Alert, Animated, Dimensions,
+  ActivityIndicator, Alert, Animated, Dimensions, Image
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -318,20 +318,28 @@ export default function SalaryRealityScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
 
-      {/* ── Header ── */}
+      {/* Header */}
       <LinearGradient
-        colors={['#312E81', '#4F46E5', '#7C3AED']}
+        colors={['#1E3A8A', '#2563EB', '#3B82F6']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={{ paddingTop: insets.top + 8, paddingBottom: 30, paddingHorizontal: 20 }}
+        style={[{ paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, zIndex: 10 }, { paddingTop: insets.top + 10 }]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={styles.headerIconBox}>
-              <Ionicons name="analytics" size={24} color="#FFF" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 15, backgroundColor: '#FFFFFF', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 }}>
+              <Image 
+                source={require('../../assets/icons/salary.png')} 
+                style={{ 
+                  width: 80, 
+                  height: 80, 
+                  transform: [{ scale: 1.15 }]
+                }} 
+                resizeMode="contain"
+              />
             </View>
             <View>
-              <Text style={styles.headerTitle}>Salary Reality</Text>
-              <Text style={styles.headerSub}>Real-time affordability analysis</Text>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.8 }}>Salary Reality</Text>
+              <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginTop: 2 }}>Real-time affordability analysis</Text>
             </View>
           </View>
           {result && (

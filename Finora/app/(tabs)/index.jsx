@@ -1,7 +1,8 @@
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import React, { useState, useCallback } from 'react';
-import { View, Text, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, RefreshControl, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { authAPI } from '../../services/api';
@@ -98,24 +99,48 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 90, 110) }} 
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
       >
-        {/* Blue Header */}
-        <View style={{ backgroundColor: '#2563EB', paddingHorizontal: 24, paddingBottom: 24, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <TouchableOpacity 
-            onPress={() => router.push('/(tabs)/profile')}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
-          >
-            <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}>
-              <Ionicons name="person" size={28} color="#FFFFFF" />
-            </View>
-            <View>
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' }}>Good day, 👋</Text>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', marginTop: 1 }}>{user?.full_name || user?.username || 'Welcome'}</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+        <LinearGradient
+          colors={['#1E3A8A', '#2563EB', '#3B82F6']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={[{ paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, zIndex: 10 }, { paddingTop: 12 }]}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <TouchableOpacity 
+              onPress={() => router.push('/(tabs)/profile')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}
+            >
+              <View style={{ 
+                width: 80, 
+                height: 80, 
+                borderRadius: 15, 
+                backgroundColor: '#FFFFFF', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                overflow: 'hidden',
+                borderWidth: 4,
+                borderColor: 'rgba(255,255,255,0.25)',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.2,
+                shadowRadius: 10,
+                elevation: 8
+              }}>
+                {user?.profile_picture ? (
+                  <Image source={{ uri: user.profile_picture }} style={{ width: '100%', height: '100%' }} />
+                ) : (
+                  <Ionicons name="person" size={57} color="#2563EB" />
+                )}
+              </View>
+              <View>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500' }}>Good day, 👋</Text>
+                <Text style={{ fontSize: 26, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 }}>{user?.full_name || user?.username || 'Welcome'}</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="notifications-outline" size={26} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
 
         {/* Balance Card */}
         <View style={{ margin: 20, marginTop: -2, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 6 }}>

@@ -1,9 +1,8 @@
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import React, { useState, useCallback } from 'react';
-import {
-  View, Text, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert
-} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, RefreshControl, ActivityIndicator, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +38,7 @@ const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', {
 })}`;
 
 export default function GoalsScreen() {
+  const insets = useSafeAreaInsets();
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -81,13 +81,30 @@ export default function GoalsScreen() {
   const totalSaved = goals.reduce((s, g) => s + parseFloat(g.current_amount), 0);
 
   return (
-    <SafeAreaView style={{flex: 1,backgroundColor: '#F7F9FC'}} edges={['top']}>
-      <View style={{backgroundColor: '#2563EB',paddingHorizontal: 24,paddingVertical: 18,flexDirection: 'row',justifyContent: 'space-between',alignItems: 'center'}}>
-        <Text style={{fontSize: 22,fontWeight: '800',color: '#FFFFFF'}}>Financial Goals</Text>
-        <TouchableOpacity style={{width: 40,height: 40,borderRadius: 12,backgroundColor: 'rgba(255,255,255,0.2)',justifyContent: 'center',alignItems: 'center'}} onPress={() => router.push('/add-goal')}>
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+    <View style={{ flex: 1, backgroundColor: '#F7F9FC' }}>
+      <LinearGradient
+        colors={['#1E3A8A', '#2563EB', '#3B82F6']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={[{ paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, zIndex: 10 }, { paddingTop: insets.top + 10 }]}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 15, backgroundColor: '#FFFFFF', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 }}>
+            <Image 
+              source={require('../../assets/icons/goal.png')} 
+              style={{ 
+                width: 80, 
+                height: 80, 
+                transform: [{ scale: 1.15 }]
+              }} 
+              resizeMode="contain"
+            />
+          </View>
+          <View>
+            <Text style={{ fontSize: 26, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.8 }}>Financial Goals</Text>
+            <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginTop: 2 }}>Track your future milestones.</Text>
+          </View>
+        </View>
+      </LinearGradient>
 
       {/* Stats bar */}
       <View style={{flexDirection: 'row',backgroundColor: '#FFFFFF',margin: 16,borderRadius: 16,padding: 16,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 6,elevation: 3}}>
@@ -178,7 +195,7 @@ export default function GoalsScreen() {
       >
         <Ionicons name="add" size={32} color="#FFFFFF" />
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 }
 
