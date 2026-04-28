@@ -60,9 +60,28 @@ class PriceHistory(models.Model):
     interval = models.CharField(max_length=5, choices=INTERVAL_CHOICES)
     recorded_at = models.DateTimeField(db_index=True)
 
+    # Technical Indicators (Phase 3)
+    rsi = models.FloatField(null=True, blank=True)
+    macd = models.FloatField(null=True, blank=True)
+    macd_signal = models.FloatField(null=True, blank=True)
+    macd_hist = models.FloatField(null=True, blank=True)
+    ema_20 = models.FloatField(null=True, blank=True)
+    ema_50 = models.FloatField(null=True, blank=True)
+
     class Meta:
         ordering = ['-recorded_at']
         indexes = [
             models.Index(fields=['asset', 'interval', 'recorded_at']),
         ]
         verbose_name_plural = "Price histories"
+
+
+class TrainingQueueItem(models.Model):
+    data_type = models.CharField(max_length=50) # 'price_update', 'news', 'user_interaction'
+    content = models.JSONField()               # The actual training example
+    processed = models.BooleanField(default=False)
+    quality_score = models.FloatField(default=0.0) # Filter low-quality data
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.data_type}] Processed: {self.processed} - Score: {self.quality_score}"
