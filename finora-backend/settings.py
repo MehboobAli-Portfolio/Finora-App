@@ -134,3 +134,17 @@ CACHES = {
         }
     }
 }
+
+# Celery Settings
+CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'update_prices_every_15_mins': {
+        'task': 'investments.tasks.update_prices',
+        'schedule': crontab(minute='*/15'),
+    },
+}
+
