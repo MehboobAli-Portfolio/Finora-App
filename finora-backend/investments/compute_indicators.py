@@ -7,13 +7,16 @@ def compute_and_store_indicators(interval='1d'):
     
     for asset in assets:
         # Fetch ordered historical prices
-        prices = PriceHistory.objects.filter(asset=asset, interval=interval).order_by('recorded_at')
-        if not prices.exists() or prices.count() < 50:
+        prices_qs = PriceHistory.objects.filter(asset=asset, interval=interval).order_by('recorded_at')
+        if not prices_qs.exists() or prices_qs.count() < 50:
             # Not enough data for EMA_50
             continue
+        
+        # Cache all records into a dictionary for fast lookup
+        price_records = {p.id: p for p in prices_qs}
             
         # Convert to DataFrame
-        data = list(prices.values('id', 'open', 'high', 'low', 'close', 'volume', 'recorded_at'))
+        data = list(prices_qs.values('id', 'open', 'high', 'low', 'close', 'volume', 'recorded_at'))
         df = pd.DataFrame(data)
         df.set_index('recorded_at', inplace=True)
         
@@ -30,17 +33,13 @@ def compute_and_store_indicators(interval='1d'):
             print(f"Error computing indicators for {asset.symbol}: {e}")
             continue
         
-        # We need to map back computed indicators to database records
-        # pandas-ta appends columns with specific names: 'RSI_14', 'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9', 'EMA_20', 'EMA_50'
-        
-        # We will iterate through df and update records that have missing indicators
-        # to avoid updating the entire table every time, we can filter for records where rsi is null
+        # Map computed indicators back to database records using cached dict
         updates = []
         for idx, row in df.iterrows():
             if pd.isna(row.get('RSI_14')):
                 continue
                 
-            record = next((p for p in prices if p.id == row['id']), None)
+            record = price_records.get(row['id'])
             if record:
                 updated = False
                 if record.rsi is None or record.rsi != float(row['RSI_14']):
@@ -66,3 +65,4 @@ def compute_and_store_indicators(interval='1d'):
                 updates, 
                 ['rsi', 'macd', 'macd_hist', 'macd_signal', 'ema_20', 'ema_50']
             )
+

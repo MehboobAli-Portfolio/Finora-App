@@ -1,9 +1,11 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, generics
 
 from .salary_logic import analyse_affordability
+from .models import SalaryProfile
+from .serializers import SalaryProfileSerializer
 
 
 @api_view(['POST'])
@@ -11,25 +13,6 @@ from .salary_logic import analyse_affordability
 def analyse_view(request):
     """
     POST /api/salary/analyse/
-
-    Accepts:
-        country    : str  (default "Pakistan")
-        state      : str
-        city       : str
-        area       : str  (optional)
-        adults     : int  (default 1)
-        children   : int  (default 0)
-        income     : float
-        frequency  : str  ("Daily" | "Weekly" | "Bi-Weekly" | "Monthly" | "Yearly")
-        currency   : str  (default "PKR", supports USD/EUR/GBP/AED/SAR/CAD/AUD)
-
-    Returns:
-        Full affordability breakdown with:
-          - affordable_tier
-          - total_expenses_display / income_monthly_display / savings_display
-          - savings_pct
-          - tier_totals  (all 4 tiers for comparison)
-          - breakdown    (per-category amounts + descriptions)
     """
     data = request.data
     try:
@@ -44,6 +27,20 @@ def analyse_view(request):
             frequency=data.get('frequency', 'Monthly'),
             currency=data.get('currency', 'PKR'),
         )
+        
+        # Save snapshot if authenticated
+        if request.user.is_authenticated:
+            from .models import SalarySnapshot
+            SalarySnapshot.objects.create(
+                user=request.user,
+                salary_usd=result.get('income_monthly_pkr', 0) * 0.0036, # Approximation
+                salary_pkr=result.get('income_monthly_pkr', 0),
+                global_pctile=0, # Placeholder logic
+                country_pctile=0,
+                industry_pctile=0,
+                benchmarks=result.get('tier_totals', {})
+            )
+
         return Response(result, status=status.HTTP_200_OK)
     except (ValueError, TypeError) as e:
         return Response(
@@ -55,3 +52,31 @@ def analyse_view(request):
             {'error': f'Missing required field: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+class SalaryProfileView(generics.RetrieveUpdateAPIView):
+    """
+    GET /api/salary/profile/
+    PUT/PATCH /api/salary/profile/
+    """
+    serializer_class = SalaryProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        obj, created = SalaryProfile.objects.get_or_create(
+            user=self.request.user,
+            defaults={
+                'country': 'PK',
+                'city': '',
+                'industry': 'other',
+                'job_title': '',
+                'experience_yrs': 0,
+                'salary_amount': 0,
+                'salary_currency': 'PKR'
+            }
+        )
+        return obj
+
+    def perform_update(self, serializer):
+        serializer.save(user=self.request.user)
+

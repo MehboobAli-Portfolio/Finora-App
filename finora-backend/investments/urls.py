@@ -5,6 +5,7 @@ from .views import (
     HoldingListCreateView,
     HoldingDetailView,
     PriceHistoryListView,
+    live_quote_view,
 )
 
 urlpatterns = [
@@ -16,4 +17,6 @@ urlpatterns = [
     path('holdings/<uuid:pk>/', HoldingDetailView.as_view(), name='holding-detail'),
     # Price history (for charts & AI)
     path('price-history/', PriceHistoryListView.as_view(), name='price-history'),
+    # Live price lookup
+    path('quote/', live_quote_view, name='live-quote'),
 ]

@@ -11,9 +11,10 @@ class GoalDepositSerializer(serializers.ModelSerializer):
 
 class GoalSerializer(serializers.ModelSerializer):
     progress_pct = serializers.ReadOnlyField()
+    progress_percentage = serializers.ReadOnlyField()
     deposits = GoalDepositSerializer(many=True, read_only=True)
 
     class Meta:
         model = Goal
         fields = '__all__'
-        read_only_fields = ('id', 'user', 'current_amount', 'created_at', 'progress_pct')
+        read_only_fields = ('id', 'user', 'created_at', 'progress_pct')
