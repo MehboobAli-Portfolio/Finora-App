@@ -124,27 +124,38 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = False
 
-# Cache Settings (Redis)
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+# Cache Settings (Redis with fallback)
+try:
+    import django_redis  # noqa: F401
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
         }
     }
-}
+except ImportError:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
 
 # Celery Settings
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
-from celery.schedules import crontab
-CELERY_BEAT_SCHEDULE = {
-    'update_prices_every_15_mins': {
-        'task': 'investments.tasks.update_prices',
-        'schedule': crontab(minute='*/15'),
-    },
-}
-
+try:
+    from celery.schedules import crontab
+    CELERY_BEAT_SCHEDULE = {
+        'update_prices_every_15_mins': {
+            'task': 'investments.tasks.update_prices',
+            'schedule': crontab(minute='*/15'),
+        },
+    }
+except ImportError:
+    # Celery not installed — beat schedule not available
+    pass

@@ -9,6 +9,13 @@ class Goal(models.Model):
         ('investment', 'Investment'),
         ('emergency', 'Emergency Fund'),
         ('travel', 'Travel'),
+        ('vacation', 'Vacation'),
+        ('education', 'Education'),
+        ('home', 'Home'),
+        ('car', 'Car'),
+        ('retirement', 'Retirement'),
+        ('debt', 'Debt Payoff'),
+        ('other', 'Other'),
     ]
     STATUS_CHOICES = [
         ('active', 'Active'),
@@ -30,6 +37,17 @@ class Goal(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.name}"
+
+    @property
+    def progress_pct(self):
+        if self.target_amount <= 0:
+            return 0
+        pct = (float(self.current_amount) / float(self.target_amount)) * 100
+        return min(100, round(pct, 1))
+
+    @property
+    def progress_percentage(self):
+        return self.progress_pct
 
 
 class GoalDeposit(models.Model):

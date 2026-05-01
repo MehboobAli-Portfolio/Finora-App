@@ -61,9 +61,9 @@ def dashboard_view(request):
         user=user, date__gte=month_start, txn_type='expense'
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # Portfolio value
+    # Portfolio value — uses the market_value property on Holding
     holdings = Holding.objects.filter(user=user)
-    portfolio_value = sum(h.market_value for h in holdings)
+    total_investments = sum(h.market_value for h in holdings)
 
     # Goals summary
     goals_count = Goal.objects.filter(user=user).count()
@@ -79,7 +79,7 @@ def dashboard_view(request):
         'balance': balance,
         'total_income': float(total_income),
         'total_expenses': float(total_expenses),
-        'portfolio_value': portfolio_value,
+        'total_investments': total_investments,
         'goals_count': goals_count,
         'completed_goals': completed_goals,
         'monthly_budget': float(user.monthly_budget),

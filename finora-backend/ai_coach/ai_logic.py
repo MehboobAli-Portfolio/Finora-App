@@ -206,14 +206,14 @@ class FinoraAI:
             return ""
         lines = []
         for t in self.txs[:limit]:
-            title = t.get("title") or "Entry"
+            desc = t.get("description") or "Entry"
             amt = float(t.get("amount") or 0)
             cat = t.get("category") or "other"
             label = _CATEGORY_LABELS.get(cat, cat)
-            tt = t.get("transaction_type") or "expense"
+            tt = t.get("txn_type") or "expense"
             d = t.get("date") or ""
             sign = "+" if tt == "income" else "-"
-            lines.append(f"- {d} {title} ({label}) {sign}${amt:,.2f}")
+            lines.append(f"- {d} {desc} ({label}) {sign}${amt:,.2f}")
         return "\nRecent activity from your ledger:\n" + "\n".join(lines)
 
     def process_chat_message(self, message: str, chat_history: list = None) -> tuple:
@@ -231,21 +231,25 @@ class FinoraAI:
         ticker = self._extract_ticker(message)
         if ticker:
             try:
-                info = yf.Ticker(ticker).fast_info
-                price = info.last_price
-                prev_close = info.previous_close
-                change = ((price - prev_close) / prev_close) * 100
-                direction = "📈 Up" if change >= 0 else "📉 Down"
-                return (
-                    f"Live Market Data Explorer 🌐:\n{ticker} is {direction} and currently trading at "
-                    f"~${price:,.2f} ({change:+.2f}% today).\n\n"
-                    f"If you believe in the long-term fundamentals of {ticker}, maintaining a balanced portfolio "
-                    "approach and using Dollar Cost Averaging with your available surplus can be highly effective. "
-                    "How else can I help?",
-                    "market_status",
-                    entities
-                )
-            except Exception:
+                ticker_obj = yf.Ticker(ticker)
+                info = ticker_obj.fast_info
+                price = getattr(info, 'last_price', None)
+                prev_close = getattr(info, 'previous_close', None)
+                
+                if price and prev_close:
+                    change = ((price - prev_close) / prev_close) * 100
+                    direction = "📈 Up" if change >= 0 else "📉 Down"
+                    return (
+                        f"Live Market Data Explorer 🌐:\n{ticker} is {direction} and currently trading at "
+                        f"~${price:,.2f} ({change:+.2f}% today).\n\n"
+                        f"If you believe in the long-term fundamentals of {ticker}, maintaining a balanced portfolio "
+                        "approach and using Dollar Cost Averaging with your available surplus can be highly effective. "
+                        "How else can I help?",
+                        "market_status",
+                        entities
+                    )
+            except Exception as e:
+                print(f"YFinance error for {ticker}: {e}")
                 pass
 
         intent = None
@@ -300,7 +304,8 @@ class FinoraAI:
         # Basic context awareness from history
         if chat_history and len(chat_history) > 0:
             last_msg = chat_history[-1]
-            if "market_status" in last_msg.get("intent", "") and intent == "investing_advice":
+            last_intent = last_msg.get("intent") or ""
+            if "market_status" in last_intent and intent == "investing_advice":
                 # slightly context-aware response modification
                 pass
 

@@ -13,8 +13,15 @@ class Transaction(models.Model):
         ('food', 'Food'),
         ('rent', 'Rent'),
         ('transport', 'Transport'),
+        ('shopping', 'Shopping'),
+        ('entertainment', 'Entertainment'),
+        ('health', 'Health'),
+        ('utilities', 'Utilities'),
+        ('education', 'Education'),
         ('salary', 'Salary'),
+        ('freelance', 'Freelance'),
         ('investment', 'Investment'),
+        ('travel', 'Travel'),
         ('other', 'Other'),
     ]
 

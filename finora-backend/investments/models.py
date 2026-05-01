@@ -32,10 +32,26 @@ class Holding(models.Model):
     avg_buy_price = models.DecimalField(max_digits=18, decimal_places=8)
     current_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     unrealized_pnl = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    notes = models.TextField(null=True, blank=True)
+    purchase_date = models.DateField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('user', 'asset')
+
+    @property
+    def market_value(self):
+        """Total current market value = quantity × current_price"""
+        qty = self.quantity or 0
+        price = self.current_price or 0
+        return float(qty * price)
+
+    @property
+    def total_invested(self):
+        """Total invested = quantity × avg_buy_price"""
+        qty = self.quantity or 0
+        buy = self.avg_buy_price or 0
+        return float(qty * buy)
 
     def __str__(self):
         return f"{self.user.email} - {self.asset.symbol}"

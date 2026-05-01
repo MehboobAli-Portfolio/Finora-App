@@ -67,7 +67,7 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
         balance=balance,
         income=total_income,
         expenses=expense_only,
-        budget=float(user.monthly_budget),
+        budget=float(user.monthly_budget or 0),
         goals_count=goals_count,
         completed_goals=completed,
         recent_transactions=recent_transactions,
@@ -161,6 +161,8 @@ def chat_view(request):
             'conversation_id': conversation.id
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
