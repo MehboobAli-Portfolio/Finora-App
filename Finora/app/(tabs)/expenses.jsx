@@ -15,11 +15,13 @@ const CATEGORY_ICONS = {
   entertainment: 'game-controller',
   health: 'fitness',
   housing: 'home',
+  rent: 'home',
   utilities: 'flash',
   education: 'school',
   salary: 'briefcase',
   freelance: 'laptop',
   investment: 'trending-up',
+  travel: 'airplane',
   other: 'ellipsis-horizontal'
 };
 
@@ -30,11 +32,13 @@ const CATEGORY_COLORS = {
   entertainment: '#8B5CF6',
   health: '#10B981',
   housing: '#6366F1',
+  rent: '#6366F1',
   utilities: '#F97316',
   education: '#2563EB',
   salary: '#059669',
   freelance: '#0891B2',
   investment: '#7C3AED',
+  travel: '#F59E0B',
   other: '#9CA3AF'
 };
 
@@ -84,8 +88,15 @@ export default function ExpensesScreen() {
     }]);
   };
 
-  const totalIncome = expenses.filter(e => e.transaction_type === 'income').reduce((s, e) => s + parseFloat(e.amount), 0);
-  const totalExpense = expenses.filter(e => e.transaction_type === 'expense').reduce((s, e) => s + parseFloat(e.amount), 0);
+  const handleEdit = (tx) => {
+    router.push({
+      pathname: '/edit-expense',
+      params: { id: tx.id }
+    });
+  };
+
+  const totalIncome = expenses.filter(e => e.txn_type === 'income').reduce((s, e) => s + parseFloat(e.amount), 0);
+  const totalExpense = expenses.filter(e => e.txn_type === 'expense').reduce((s, e) => s + parseFloat(e.amount), 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F7F9FC' }}>
@@ -158,10 +169,18 @@ export default function ExpensesScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            expenses.map(exp => <ExpenseCard key={exp.id} exp={exp} onDelete={() => handleDelete(exp.id)} />)
+            expenses.map(exp => (
+              <ExpenseCard 
+                key={exp.id} 
+                exp={exp} 
+                onDelete={() => handleDelete(exp.id)} 
+                onEdit={() => handleEdit(exp)}
+              />
+            ))
           )}
         </KeyboardAwareScrollView>
       )}
+
 
       {/* Floating Action Button */}
       <TouchableOpacity 
@@ -192,9 +211,10 @@ export default function ExpensesScreen() {
 
 function ExpenseCard({
   exp,
-  onDelete
+  onDelete,
+  onEdit
 }) {
-  const isIncome = exp.transaction_type === 'income';
+  const isIncome = exp.txn_type === 'income';
   const icon = CATEGORY_ICONS[exp.category] || 'ellipsis-horizontal';
   const color = CATEGORY_COLORS[exp.category] || '#9CA3AF';
   return (
@@ -203,17 +223,23 @@ function ExpenseCard({
         <Ionicons name={icon} size={20} color={color} />
       </View>
       <View style={{flex: 1}}>
-        <Text style={{fontSize: 14,fontWeight: '600',color: '#111827'}}>{exp.title}</Text>
+        <Text style={{fontSize: 14,fontWeight: '600',color: '#111827'}}>{exp.description || 'No Title'}</Text>
         <Text style={{fontSize: 12,color: '#9CA3AF',marginTop: 2,textTransform: 'capitalize'}}>{exp.category} · {exp.date}</Text>
       </View>
       <View style={{alignItems: 'flex-end',gap: 6}}>
         <Text style={[{fontSize: 14,fontWeight: '700'}, { color: isIncome ? '#10B981' : '#EF4444' }]}>
           {isIncome ? '+' : '-'}{fmt(exp.amount)}
         </Text>
-        <TouchableOpacity onPress={onDelete} style={{padding: 4}}>
-          <Ionicons name="trash-outline" size={16} color="#9CA3AF" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={onEdit} style={{padding: 4}}>
+            <Ionicons name="pencil-outline" size={16} color="#2563EB" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDelete} style={{padding: 4}}>
+            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
+

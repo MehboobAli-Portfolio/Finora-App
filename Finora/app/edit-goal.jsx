@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, Platform
+  View, Text, ScrollView, TouchableOpacity,
+  TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -58,13 +58,41 @@ const GOAL_TYPES = [{
 
 export default function EditGoalScreen() {
   const params = useLocalSearchParams();
-  const [title, setTitle] = useState(params.title || '');
-  const [goalType, setGoalType] = useState(params.goal_type || 'savings');
-  const [targetAmount, setTargetAmount] = useState(params.target_amount ? params.target_amount.toString() : '');
-  const [currentAmount, setCurrentAmount] = useState(params.current_amount ? params.current_amount.toString() : '0');
-  const [targetDate, setTargetDate] = useState(params.target_date || '');
-  const [description, setDescription] = useState(params.description || '');
+  const { id } = params;
+
+  const [title, setTitle] = useState('');
+  const [goalType, setGoalType] = useState('savings');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [currentAmount, setCurrentAmount] = useState('0');
+  const [targetDate, setTargetDate] = useState('');
+  const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    if (id) {
+      loadGoal();
+    }
+  }, [id]);
+
+  const loadGoal = async () => {
+    try {
+      const res = await goalsAPI.get(id);
+      const g = res.data;
+      if (g) {
+        setTitle(g.name);
+        setGoalType(g.category);
+        setTargetAmount(g.target_amount.toString());
+        setCurrentAmount(g.current_amount.toString());
+        setTargetDate(g.deadline || '');
+        // Note: description field might not exist in backend, let's check
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load goal data');
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!title || !targetAmount) {
@@ -72,24 +100,33 @@ export default function EditGoalScreen() {
       return;
     }
     setLoading(true);
+
     try {
-      await goalsAPI.update(params.id, {
-        title,
-        goal_type: goalType,
+      await goalsAPI.update(id, {
+        name: title,
+        category: goalType,
         target_amount: parseFloat(targetAmount),
         current_amount: parseFloat(currentAmount || 0),
-        target_date: targetDate || null,
-        description
+        deadline: targetDate || null,
       });
       router.back();
     } catch (e) {
-      Alert.alert('Error', 'Failed to update goal');
+      const errMsg = e?.response?.data?.detail || 'Failed to update goal';
+      Alert.alert('Error', errMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedType = GOAL_TYPES.find(t => t.id === goalType) || GOAL_TYPES[0];
+  const selectedType = GOAL_TYPES.find(t => t.id === goalType);
+
+  if (fetching) {
+    return (
+      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={{flex: 1,backgroundColor: '#F7F9FC'}} edges={['top']}>
@@ -114,6 +151,22 @@ export default function EditGoalScreen() {
                 style={{fontSize: 48,fontWeight: '800',color: '#111827',minWidth: 120}}
                 value={targetAmount}
                 onChangeText={setTargetAmount}
+                keyboardType="decimal-pad"
+                placeholder="0"
+                placeholderTextColor="#D1D5DB"
+              />
+            </View>
+          </View>
+
+          {/* Already Saved */}
+          <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 20,marginBottom: 20,alignItems: 'center',shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 3}}>
+            <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '700',textTransform: 'uppercase',letterSpacing: 0.5,marginBottom: 8}}>Current Savings</Text>
+            <View style={{flexDirection: 'row',alignItems: 'center'}}>
+              <Text style={{fontSize: 32,fontWeight: '800',color: '#10B981',marginRight: 4}}>$</Text>
+              <TextInput
+                style={{fontSize: 48,fontWeight: '800',color: '#111827',minWidth: 120}}
+                value={currentAmount}
+                onChangeText={setCurrentAmount}
                 keyboardType="decimal-pad"
                 placeholder="0"
                 placeholderTextColor="#D1D5DB"
@@ -152,19 +205,6 @@ export default function EditGoalScreen() {
             </View>
           </View>
 
-          {/* Already Saved */}
-          <View style={{marginBottom: 18}}>
-            <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Already Saved ($)</Text>
-            <TextInput
-              style={{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,fontSize: 15,color: '#111827'}}
-              value={currentAmount}
-              onChangeText={setCurrentAmount}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
           {/* Target Date */}
           <View style={{marginBottom: 18}}>
             <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Target Date (optional)</Text>
@@ -177,28 +217,15 @@ export default function EditGoalScreen() {
             />
           </View>
 
-          {/* Description */}
-          <View style={{marginBottom: 18}}>
-            <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Notes (optional)</Text>
-            <TextInput
-              style={[{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,fontSize: 15,color: '#111827'}, { height: 80, textAlignVertical: 'top', paddingTop: 12 }]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Describe your goal..."
-              multiline
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
           <TouchableOpacity
-            style={[{borderRadius: 16,height: 56,flexDirection: 'row',alignItems: 'center',justifyContent: 'center',gap: 10,marginTop: 8,marginBottom: 20}, { backgroundColor: selectedType.color }]}
+            style={[{borderRadius: 16,height: 56,flexDirection: 'row',alignItems: 'center',justifyContent: 'center',gap: 10,marginTop: 8,marginBottom: 20}, { backgroundColor: selectedType?.color || '#2563EB' }]}
             onPress={handleSubmit}
             disabled={loading}
           >
             {loading ? <ActivityIndicator color="#FFF" /> : (
               <>
                 <Ionicons name="save" size={20} color="#FFFFFF" />
-                <Text style={{fontSize: 17,fontWeight: '700',color: '#FFFFFF'}}>Save Changes</Text>
+                <Text style={{fontSize: 17,fontWeight: '700',color: '#FFFFFF'}}>Update Goal</Text>
               </>
             )}
           </TouchableOpacity>

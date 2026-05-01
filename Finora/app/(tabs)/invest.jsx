@@ -1,12 +1,13 @@
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, RefreshControl, ActivityIndicator, Alert, Image } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { investmentsAPI } from '../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { theme } from '../../theme';
 
 const TYPE_ICONS = {
   stocks: 'stats-chart',
@@ -20,14 +21,14 @@ const TYPE_ICONS = {
 };
 
 const TYPE_COLORS = {
-  stocks: '#2563EB',
-  crypto: '#F59E0B',
-  real_estate: '#10B981',
+  stocks: theme.colors.primary,
+  crypto: theme.colors.warning,
+  real_estate: theme.colors.secondary,
   bonds: '#6366F1',
   mutual_funds: '#8B5CF6',
   etf: '#3B82F6',
   gold: '#D97706',
-  other: '#9CA3AF'
+  other: theme.colors.textSecondary
 };
 
 const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', {
@@ -37,25 +38,34 @@ const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', {
 
 export default function InvestScreen() {
   const insets = useSafeAreaInsets();
-  const [investments, setInvestments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
 
-  const load = async () => {
-    try {
+  const { data: investments = [], isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['investments'],
+    queryFn: async () => {
       const res = await investmentsAPI.list();
-      setInvestments(res.data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      return res.data;
     }
-  };
+  });
 
   useFocusEffect(useCallback(() => {
-    load();
+    refetch();
   }, []));
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => investmentsAPI.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['investments'] });
+    }
+  });
+
+  // Periodic refresh for live price updates (every 60s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetch();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   const handleDelete = id => {
     Alert.alert('Delete Investment', 'Remove this investment?', [{
@@ -64,39 +74,33 @@ export default function InvestScreen() {
     }, {
       text: 'Delete',
       style: 'destructive',
-      onPress: async () => {
-        await investmentsAPI.delete(id);
-        load();
-      }
+      onPress: () => deleteMutation.mutate(id)
     }]);
   };
 
-  const totalInvested = investments.reduce((s, i) => s + parseFloat(i.amount), 0);
-  const totalValue = investments.reduce((s, i) => s + parseFloat(i.current_value || i.amount), 0);
+  // Use the serializer-provided fields (amount, current_value)
+  const totalInvested = investments.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+  const totalValue = investments.reduce((s, i) => s + parseFloat(i.current_value || i.amount || 0), 0);
   const totalReturn = totalValue - totalInvested;
   const returnPct = totalInvested > 0 ? ((totalReturn / totalInvested) * 100).toFixed(2) : 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F7F9FC' }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <LinearGradient
-        colors={['#1E3A8A', '#2563EB', '#3B82F6']}
+        colors={[theme.colors.primary, '#2563EB', '#3B82F6']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[{ paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, zIndex: 10 }, { paddingTop: insets.top + 10 }]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 15, backgroundColor: '#FFFFFF', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 15, backgroundColor: theme.colors.surface, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 }}>
             <Image 
               source={require('../../assets/icons/invest.png')} 
-              style={{ 
-                width: 80, 
-                height: 80, 
-                transform: [{ scale: 1.15 }]
-              }} 
+              style={{ width: 80, height: 80, transform: [{ scale: 1.15 }] }} 
               resizeMode="contain"
             />
           </View>
           <View>
-            <Text style={{ fontSize: 26, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.8 }}>Investments</Text>
+            <Text style={{ fontSize: 26, fontWeight: '900', color: theme.colors.surface, letterSpacing: -0.8 }}>Investments</Text>
             <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginTop: 2 }}>Grow your wealth over time.</Text>
           </View>
         </View>
@@ -105,40 +109,40 @@ export default function InvestScreen() {
       {/* Portfolio Summary */}
       <View style={{margin: 16,backgroundColor: '#1E3A8A',borderRadius: 22,padding: 22,shadowColor: '#1E3A8A',shadowOffset: {width: 0,height: 6},shadowOpacity: 0.3,shadowRadius: 12,elevation: 8}}>
         <Text style={{fontSize: 13,color: 'rgba(255,255,255,0.8)',fontWeight: '600',marginBottom: 6}}>Total Portfolio Value</Text>
-        <Text style={{fontSize: 34,fontWeight: '800',color: '#FFFFFF',marginBottom: 16}}>{fmt(totalValue)}</Text>
+        <Text style={{fontSize: 34,fontWeight: '800',color: theme.colors.surface,marginBottom: 16}}>{fmt(totalValue)}</Text>
         <View style={{flexDirection: 'row',justifyContent: 'space-between',alignItems: 'center'}}>
           <View>
             <Text style={{fontSize: 12,color: 'rgba(255,255,255,0.6)',marginBottom: 2}}>Invested</Text>
-            <Text style={{fontSize: 16,fontWeight: '700',color: '#FFFFFF'}}>{fmt(totalInvested)}</Text>
+            <Text style={{fontSize: 16,fontWeight: '700',color: theme.colors.surface}}>{fmt(totalInvested)}</Text>
           </View>
           <View style={[{flexDirection: 'row',alignItems: 'center',gap: 4,paddingHorizontal: 12,paddingVertical: 8,borderRadius: 10}, { backgroundColor: totalReturn >= 0 ? '#D1FAE5' : '#FEE2E2' }]}>
             <Ionicons
               name={totalReturn >= 0 ? 'trending-up' : 'trending-down'}
               size={16}
-              color={totalReturn >= 0 ? '#10B981' : '#EF4444'}
+              color={totalReturn >= 0 ? theme.colors.secondary : theme.colors.danger}
             />
-            <Text style={[{fontSize: 15,fontWeight: '700'}, { color: totalReturn >= 0 ? '#10B981' : '#EF4444' }]}>
+            <Text style={[{fontSize: 15,fontWeight: '700'}, { color: totalReturn >= 0 ? theme.colors.secondary : theme.colors.danger }]}>
               {totalReturn >= 0 ? '+' : ''}{returnPct}%
             </Text>
           </View>
         </View>
       </View>
 
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color="#2563EB" />
+      {isLoading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
       ) : (
         <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 20 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
         >
           {investments.length === 0 ? (
             <View style={{alignItems: 'center',paddingVertical: 60}}>
               <Ionicons name="trending-up-outline" size={48} color="#D1D5DB" />
               <Text style={{fontSize: 18,fontWeight: '700',color: '#374151',marginTop: 16,marginBottom: 8}}>No investments</Text>
               <Text style={{fontSize: 14,color: '#9CA3AF',textAlign: 'center',marginBottom: 24}}>Start building your investment portfolio</Text>
-              <TouchableOpacity style={{backgroundColor: '#2563EB',paddingHorizontal: 24,paddingVertical: 12,borderRadius: 12}} onPress={() => router.push('/add-investment')}>
-                <Text style={{color: '#FFFFFF',fontWeight: '700',fontSize: 14}}>+ Add Investment</Text>
+              <TouchableOpacity style={{backgroundColor: theme.colors.primary,paddingHorizontal: 24,paddingVertical: 12,borderRadius: 12}} onPress={() => router.push('/add-investment')}>
+                <Text style={{color: theme.colors.surface,fontWeight: '700',fontSize: 14}}>+ Add Investment</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -161,10 +165,10 @@ export default function InvestScreen() {
           width: 64,
           height: 64,
           borderRadius: 32,
-          backgroundColor: '#2563EB',
+          backgroundColor: theme.colors.primary,
           justifyContent: 'center',
           alignItems: 'center',
-          shadowColor: '#2563EB',
+          shadowColor: theme.colors.primary,
           shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.4,
           shadowRadius: 12,
@@ -173,7 +177,7 @@ export default function InvestScreen() {
         activeOpacity={0.8}
         onPress={() => router.push('/add-investment')}
       >
-        <Ionicons name="add" size={32} color="#FFFFFF" />
+        <Ionicons name="add" size={32} color={theme.colors.surface} />
       </TouchableOpacity>
     </View>
   );
@@ -183,6 +187,7 @@ function InvestCard({
   inv,
   onDelete
 }) {
+  // Fields now come properly from the serializer
   const icon = TYPE_ICONS[inv.investment_type] || 'cash';
   const color = TYPE_COLORS[inv.investment_type] || '#9CA3AF';
   const returnAmt = parseFloat(inv.return_amount || 0);
@@ -198,7 +203,7 @@ function InvestCard({
         <View style={{flex: 1}}>
           <Text style={{fontSize: 15,fontWeight: '700',color: '#111827'}}>{inv.name}</Text>
           {inv.symbol ? <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '600'}}>{inv.symbol}</Text> : null}
-          <Text style={{fontSize: 11,color: '#9CA3AF',textTransform: 'capitalize',marginTop: 1}}>{inv.investment_type.replace('_', ' ')}</Text>
+          <Text style={{fontSize: 11,color: '#9CA3AF',textTransform: 'capitalize',marginTop: 1}}>{(inv.investment_type || '').replace('_', ' ')}</Text>
         </View>
         <TouchableOpacity onPress={onDelete} style={{ padding: 6 }}>
           <Ionicons name="trash-outline" size={18} color="#D1D5DB" />
@@ -208,11 +213,11 @@ function InvestCard({
       <View style={{flexDirection: 'row',justifyContent: 'space-between',alignItems: 'center'}}>
         <View>
           <Text style={{fontSize: 11,color: '#9CA3AF',marginBottom: 2,fontWeight: '600'}}>Invested</Text>
-          <Text style={{fontSize: 14,fontWeight: '700',color: '#111827'}}>{`$${parseFloat(inv.amount).toFixed(2)}`}</Text>
+          <Text style={{fontSize: 14,fontWeight: '700',color: '#111827'}}>{`$${parseFloat(inv.amount || 0).toFixed(2)}`}</Text>
         </View>
         <View>
           <Text style={{fontSize: 11,color: '#9CA3AF',marginBottom: 2,fontWeight: '600'}}>Current</Text>
-          <Text style={{fontSize: 14,fontWeight: '700',color: '#111827'}}>{`$${parseFloat(inv.current_value || inv.amount).toFixed(2)}`}</Text>
+          <Text style={{fontSize: 14,fontWeight: '700',color: '#111827'}}>{`$${parseFloat(inv.current_value || inv.amount || 0).toFixed(2)}`}</Text>
         </View>
         <View style={[{paddingHorizontal: 10,paddingVertical: 6,borderRadius: 8,alignItems: 'center'}, { backgroundColor: isPositive ? '#D1FAE5' : '#FEE2E2' }]}>
           <Text style={[{fontSize: 14,fontWeight: '800'}, { color: isPositive ? '#10B981' : '#EF4444' }]}>

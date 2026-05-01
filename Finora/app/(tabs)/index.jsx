@@ -7,6 +7,9 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { useFinanceStore } from '../../store/useFinanceStore';
+import { theme } from '../../theme';
 
 const formatCurrency = amount => {
   return `$${parseFloat(amount || 0).toLocaleString('en-US', {
@@ -22,11 +25,13 @@ const CATEGORY_ICONS = {
   entertainment: 'game-controller',
   health: 'fitness',
   housing: 'home',
+  rent: 'home',
   utilities: 'flash',
   education: 'school',
   salary: 'briefcase',
   freelance: 'laptop',
   investment: 'trending-up',
+  travel: 'airplane',
   other: 'ellipsis-horizontal'
 };
 
@@ -37,52 +42,48 @@ const CATEGORY_COLORS = {
   entertainment: '#8B5CF6',
   health: '#10B981',
   housing: '#6366F1',
+  rent: '#6366F1',
   utilities: '#F97316',
   education: '#2563EB',
   salary: '#059669',
   freelance: '#0891B2',
   investment: '#7C3AED',
+  travel: '#F59E0B',
   other: '#9CA3AF'
 };
 
 export default function HomeScreen() {
-  const {
-    user
-  } = useAuth();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [dashboard, setDashboard] = useState(null);
-  const [aiInsight, setAiInsight] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const setDashboardData = useFinanceStore(state => state.setDashboardData);
 
-  const loadDashboard = async () => {
-    try {
+  const { data: dashboard, isLoading: loading, refetch, isRefetching } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
       const res = await authAPI.getDashboard();
-      setDashboard(res.data);
-      
-      // Fetch AI insight lazily
-      authAPI.getDashboardInsight()
-        .then(res => setAiInsight(res.data.ai_suggestion))
-        .catch(e => console.log('AI Insight Error:', e));
-        
-    } catch (e) {
-      console.error('Dashboard error:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setDashboardData(res.data);
+      return res.data;
     }
-  };
+  });
 
   useFocusEffect(useCallback(() => {
-    loadDashboard();
+    refetch();
   }, []));
 
+  const { data: aiInsight } = useQuery({
+    queryKey: ['aiInsight'],
+    queryFn: async () => {
+      const res = await authAPI.getDashboardInsight();
+      return res.data.ai_suggestion;
+    }
+  });
+
   const onRefresh = () => {
-    setRefreshing(true);
-    loadDashboard();
+    refetch();
   };
 
-  if (loading) {
+
+  if (loading && !dashboard) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F7F9FC' }}>
         <ActivityIndicator size="large" color="#2563EB" />
@@ -97,10 +98,10 @@ export default function HomeScreen() {
       <KeyboardAwareScrollView 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 90, 110) }} 
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
         <LinearGradient
-          colors={['#1E3A8A', '#2563EB', '#3B82F6']}
+          colors={[theme.colors.primary, '#2563EB', '#3B82F6']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[{ paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, zIndex: 10 }, { paddingTop: 12 }]}
         >
@@ -240,6 +241,26 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Analytics Charts */}
+        <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Income vs Expenses</Text>
+          <View style={{ flexDirection: 'row', height: 160, alignItems: 'flex-end', justifyContent: 'space-around' }}>
+            {/* Income Bar */}
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, fontWeight: '600' }}>{formatCurrency(dashboard?.total_income)}</Text>
+              <View style={{ width: 48, height: Math.max(8, ((dashboard?.total_income || 0) / Math.max(dashboard?.total_income || 1, dashboard?.total_expenses || 1)) * 100), backgroundColor: '#10B981', borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />
+              <Text style={{ fontSize: 13, color: '#374151', marginTop: 8, fontWeight: '600' }}>Income</Text>
+            </View>
+            
+            {/* Expense Bar */}
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, fontWeight: '600' }}>{formatCurrency(dashboard?.total_expenses)}</Text>
+              <View style={{ width: 48, height: Math.max(8, ((dashboard?.total_expenses || 0) / Math.max(dashboard?.total_income || 1, dashboard?.total_expenses || 1)) * 100), backgroundColor: '#EF4444', borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />
+              <Text style={{ fontSize: 13, color: '#374151', marginTop: 8, fontWeight: '600' }}>Expenses</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Recent Transactions */}
         <View style={{ marginHorizontal: 20, marginBottom: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -287,14 +308,14 @@ function TransactionItem({
 }) {
   const icon = CATEGORY_ICONS[tx.category] || 'ellipsis-horizontal';
   const color = CATEGORY_COLORS[tx.category] || '#9CA3AF';
-  const isIncome = tx.transaction_type === 'income';
+  const isIncome = tx.txn_type === 'income';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginBottom: 8, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 }}>
       <View style={{ width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: `${color}18` }}>
         <Ionicons name={icon} size={20} color={color} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>{tx.title}</Text>
+        <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>{tx.description}</Text>
         <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2, textTransform: 'capitalize' }}>{tx.category} · {tx.date}</Text>
       </View>
       <Text style={{ fontSize: 15, fontWeight: '700', color: isIncome ? '#10B981' : '#EF4444' }}>
