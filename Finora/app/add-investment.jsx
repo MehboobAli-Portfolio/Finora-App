@@ -51,6 +51,57 @@ const INVEST_TYPES = [{
   color: '#9CA3AF'
 }];
 
+// Real yfinance-trackable ticker suggestions per investment type
+const SYMBOL_SUGGESTIONS = {
+  stocks: [
+    { symbol: 'AAPL', name: 'Apple Inc.' },
+    { symbol: 'TSLA', name: 'Tesla Inc.' },
+    { symbol: 'MSFT', name: 'Microsoft' },
+    { symbol: 'GOOGL', name: 'Alphabet (Google)' },
+    { symbol: 'AMZN', name: 'Amazon' },
+    { symbol: 'NVDA', name: 'NVIDIA' },
+    { symbol: 'META', name: 'Meta Platforms' },
+  ],
+  crypto: [
+    { symbol: 'BTC-USD', name: 'Bitcoin' },
+    { symbol: 'ETH-USD', name: 'Ethereum' },
+    { symbol: 'SOL-USD', name: 'Solana' },
+    { symbol: 'DOGE-USD', name: 'Dogecoin' },
+    { symbol: 'BNB-USD', name: 'Binance Coin' },
+    { symbol: 'XRP-USD', name: 'Ripple XRP' },
+    { symbol: 'ADA-USD', name: 'Cardano' },
+  ],
+  etf: [
+    { symbol: 'SPY', name: 'S&P 500 ETF' },
+    { symbol: 'QQQ', name: 'Nasdaq 100 ETF' },
+    { symbol: 'VTI', name: 'Total Stock Market' },
+    { symbol: 'VOO', name: 'Vanguard S&P 500' },
+    { symbol: 'IWM', name: 'Russell 2000 ETF' },
+  ],
+  gold: [
+    { symbol: 'GC=F', name: 'Gold Futures' },
+    { symbol: 'GLD', name: 'SPDR Gold ETF' },
+    { symbol: 'SI=F', name: 'Silver Futures' },
+    { symbol: 'IAU', name: 'iShares Gold Trust' },
+  ],
+  bonds: [
+    { symbol: 'TLT', name: 'iShares 20+ Year Bond' },
+    { symbol: 'BND', name: 'Vanguard Total Bond' },
+    { symbol: 'AGG', name: 'iShares Core Bond' },
+  ],
+  mutual_funds: [
+    { symbol: 'VTSAX', name: 'Vanguard Total Stock' },
+    { symbol: 'FXAIX', name: 'Fidelity 500 Index' },
+    { symbol: 'VFIAX', name: 'Vanguard 500 Index' },
+  ],
+  real_estate: [
+    { symbol: 'VNQ', name: 'Vanguard Real Estate ETF' },
+    { symbol: 'IYR', name: 'iShares US Real Estate' },
+    { symbol: 'XLRE', name: 'Real Estate Select Sector' },
+  ],
+  other: [],
+};
+
 export default function AddInvestmentScreen() {
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
@@ -60,6 +111,24 @@ export default function AddInvestmentScreen() {
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [livePrice, setLivePrice] = useState(null);
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+
+  // Fetch live price when a real ticker is selected
+  const fetchQuote = async (sym) => {
+    if (!sym || sym.startsWith('MAN-') || sym.startsWith('MF-')) return;
+    setFetchingPrice(true);
+    try {
+      const res = await investmentsAPI.getQuote(sym);
+      const price = res.data.price;
+      setLivePrice(res.data);
+      setCurrentValue(String(price));
+    } catch (e) {
+      setLivePrice(null);
+    } finally {
+      setFetchingPrice(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!name || !amount) {
@@ -70,7 +139,7 @@ export default function AddInvestmentScreen() {
     try {
       await investmentsAPI.create({
         name,
-        symbol: symbol.toUpperCase(),
+        symbol: symbol.trim().toUpperCase() || '',  // Empty string = backend generates unique ID
         investment_type: investType,
         amount: parseFloat(amount),
         current_value: parseFloat(currentValue || amount),
@@ -79,7 +148,8 @@ export default function AddInvestmentScreen() {
       });
       router.back();
     } catch (e) {
-      Alert.alert('Error', 'Failed to add investment');
+      const errMsg = e?.response?.data?.detail || e?.response?.data?.non_field_errors?.[0] || 'Failed to add investment';
+      Alert.alert('Error', errMsg);
     } finally {
       setLoading(false);
     }
@@ -143,6 +213,53 @@ export default function AddInvestmentScreen() {
               autoCapitalize="characters"
               placeholderTextColor="#9CA3AF"
             />
+            {/* Symbol Suggestions */}
+            {(SYMBOL_SUGGESTIONS[investType] || []).length > 0 && (
+              <View style={{ marginTop: 10 }}>
+                <Text style={{ fontSize: 11, color: '#6B7280', marginBottom: 6, fontWeight: '600' }}>
+                  Quick pick (enables live price tracking):
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+                  {SYMBOL_SUGGESTIONS[investType].map(s => (
+                    <TouchableOpacity
+                      key={s.symbol}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        backgroundColor: symbol === s.symbol ? `${selectedType?.color || '#2563EB'}18` : '#F3F4F6',
+                        borderRadius: 10,
+                        marginHorizontal: 4,
+                        borderWidth: symbol === s.symbol ? 1.5 : 0,
+                        borderColor: selectedType?.color || '#2563EB',
+                      }}
+                      onPress={() => {
+                        setSymbol(s.symbol);
+                        if (!name) setName(s.name);
+                        fetchQuote(s.symbol);
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: symbol === s.symbol ? (selectedType?.color || '#2563EB') : '#374151' }}>{s.symbol}</Text>
+                      <Text style={{ fontSize: 9, color: '#9CA3AF', marginTop: 1 }}>{s.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {/* Live price badge */}
+                {fetchingPrice && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                    <ActivityIndicator size="small" color={selectedType?.color || '#2563EB'} />
+                    <Text style={{ fontSize: 12, color: '#6B7280' }}>Fetching live price...</Text>
+                  </View>
+                )}
+                {livePrice && !fetchingPrice && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, backgroundColor: '#D1FAE5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
+                    <Ionicons name="pulse" size={14} color="#10B981" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#10B981' }}>
+                      Live: ${livePrice.price?.toFixed(2)} ({livePrice.change_percent >= 0 ? '+' : ''}{livePrice.change_percent?.toFixed(2)}%)
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Amount row */}

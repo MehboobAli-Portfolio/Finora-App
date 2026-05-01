@@ -71,18 +71,19 @@ export default function AddGoalScreen() {
       return;
     }
     setLoading(true);
+
     try {
       await goalsAPI.create({
-        title,
-        goal_type: goalType,
+        name: title,
+        category: goalType,
         target_amount: parseFloat(targetAmount),
         current_amount: parseFloat(currentAmount || 0),
-        target_date: targetDate || null,
-        description
+        deadline: targetDate || null,
       });
       router.back();
     } catch (e) {
-      Alert.alert('Error', 'Failed to create goal');
+      const errMsg = e?.response?.data?.category?.[0] || e?.response?.data?.detail || 'Failed to create goal';
+      Alert.alert('Error', errMsg);
     } finally {
       setLoading(false);
     }

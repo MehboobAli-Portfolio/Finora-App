@@ -11,6 +11,8 @@ import { goalsAPI } from '../../services/api';
 const GOAL_ICONS = {
   savings: 'cash',
   emergency: 'shield-checkmark',
+  investment: 'trending-up',
+  travel: 'airplane',
   vacation: 'airplane',
   education: 'school',
   home: 'home',
@@ -23,6 +25,8 @@ const GOAL_ICONS = {
 const GOAL_COLORS = {
   savings: '#2563EB',
   emergency: '#EF4444',
+  investment: '#10B981',
+  travel: '#F59E0B',
   vacation: '#F59E0B',
   education: '#8B5CF6',
   home: '#10B981',
@@ -157,18 +161,19 @@ export default function GoalsScreen() {
             </View>
           ) : (
             goals.map(goal => (
-              <TouchableOpacity 
+              <GoalCard 
                 key={goal.id} 
-                activeOpacity={0.8} 
-                onPress={() => router.push({
+                goal={goal} 
+                onDelete={() => handleDelete(goal.id)} 
+                onEdit={() => router.push({
                   pathname: '/edit-goal',
-                  params: { ...goal }
+                  params: { id: goal.id }
                 })}
-              >
-                <GoalCard goal={goal} onDelete={() => handleDelete(goal.id)} onUpdate={loadGoals} />
-              </TouchableOpacity>
+                onUpdate={loadGoals} 
+              />
             ))
           )}
+
         </KeyboardAwareScrollView>
       )}
 
@@ -202,11 +207,12 @@ export default function GoalsScreen() {
 function GoalCard({
   goal,
   onDelete,
+  onEdit,
   onUpdate
 }) {
-  const icon = GOAL_ICONS[goal.goal_type] || 'flag';
-  const color = GOAL_COLORS[goal.goal_type] || '#9CA3AF';
-  const progress = goal.progress_percentage || 0;
+  const icon = GOAL_ICONS[goal.category] || 'flag';
+  const color = GOAL_COLORS[goal.category] || '#9CA3AF';
+  const progress = goal.progress_percentage || goal.progress_pct || 0;
 
   return (
     <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 16,marginBottom: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 4}}>
@@ -215,19 +221,25 @@ function GoalCard({
           <Ionicons name={icon} size={24} color={color} />
         </View>
         <View style={{flex: 1}}>
-          <Text style={{fontSize: 15,fontWeight: '700',color: '#111827'}}>{goal.title}</Text>
-          <Text style={{fontSize: 12,color: '#9CA3AF',marginTop: 2,textTransform: 'capitalize'}}>{goal.goal_type}</Text>
+          <Text style={{fontSize: 15,fontWeight: '700',color: '#111827'}}>{goal.name}</Text>
+          <Text style={{fontSize: 12,color: '#9CA3AF',marginTop: 2,textTransform: 'capitalize'}}>{goal.category}</Text>
         </View>
         {goal.is_completed && (
-          <View style={{flexDirection: 'row',alignItems: 'center',gap: 3,backgroundColor: '#D1FAE5',paddingHorizontal: 8,paddingVertical: 4,borderRadius: 8}}>
+          <View style={{flexDirection: 'row',alignItems: 'center',gap: 3,backgroundColor: '#D1FAE5',paddingHorizontal: 8,paddingVertical: 4,borderRadius: 8, marginRight: 4}}>
             <Ionicons name="checkmark-circle" size={16} color="#10B981" />
             <Text style={{fontSize: 11,fontWeight: '600',color: '#10B981'}}>Done</Text>
           </View>
         )}
-        <TouchableOpacity onPress={onDelete} style={{ padding: 4 }}>
-          <Ionicons name="trash-outline" size={18} color="#9CA3AF" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <TouchableOpacity onPress={onEdit} style={{ padding: 4 }}>
+            <Ionicons name="pencil-outline" size={18} color="#2563EB" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDelete} style={{ padding: 4 }}>
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
       </View>
+
 
       {/* Progress */}
       <View style={{}}>
@@ -240,8 +252,8 @@ function GoalCard({
         <View style={{height: 8,backgroundColor: '#F3F4F6',borderRadius: 4,overflow: 'hidden'}}>
           <View style={[{height: '100%',borderRadius: 4}, { width: `${progress}%`, backgroundColor: color }]} />
         </View>
-        {goal.target_date && (
-          <Text style={{fontSize: 12,color: '#6B7280',marginTop: 8}}>🎯 Target: {goal.target_date}</Text>
+        {goal.deadline && (
+          <Text style={{fontSize: 12,color: '#6B7280',marginTop: 8}}>🎯 Target: {goal.deadline}</Text>
         )}
       </View>
     </View>

@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { expensesAPI } from '../services/api';
 
 const CATEGORIES = [{
@@ -67,50 +66,46 @@ const CATEGORIES = [{
   color: '#9CA3AF'
 }];
 
-export default function AddExpenseScreen() {
+export default function EditExpenseScreen() {
+  const params = useLocalSearchParams();
+  const { id } = params;
+
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('food');
   const [type, setType] = useState('expense');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
-  const [scanning, setScanning] = useState(false);
+  const [fetching, setFetching] = useState(true);
 
-  const handleScanReceipt = async () => {
+  useEffect(() => {
+    if (id) {
+      loadTransaction();
+    }
+  }, [id]);
+
+  const loadTransaction = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setScanning(true);
-        const asset = result.assets[0];
+      const res = await expensesAPI.get(id);
+      const tx = res.data;
+      if (tx) {
+        setAmount(tx.amount.toString());
+        setCategory(tx.category);
+        setType(tx.txn_type);
+        setDate(tx.date);
         
-        const formData = new FormData();
-        const filename = asset.uri.split('/').pop() || 'receipt.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image`;
-        
-        formData.append('receipt', { uri: asset.uri, name: filename, type });
-        
-        const response = await expensesAPI.scanReceipt(formData);
-        
-        if (response.data.amount) {
-            setAmount(response.data.amount.toString());
+        // Split description if it contains our custom separator
+        const parts = tx.description.split(' - ');
+        setTitle(parts[0]);
+        if (parts.length > 1) {
+            setDescription(parts.slice(1).join(' - '));
         }
-        if (response.data.category && response.data.category !== 'other') {
-            setCategory(response.data.category);
-        }
-        setTitle('Scanned Receipt');
       }
     } catch (e) {
-        Alert.alert('Scan Failed', 'Could not process the receipt image.');
-        console.log(e);
+      Alert.alert('Error', 'Failed to load transaction data');
     } finally {
-        setScanning(false);
+      setFetching(false);
     }
   };
 
@@ -122,7 +117,7 @@ export default function AddExpenseScreen() {
     setLoading(true);
 
     try {
-      await expensesAPI.create({
+      await expensesAPI.update(id, {
         amount: parseFloat(amount),
         category: category,
         txn_type: type,
@@ -131,12 +126,20 @@ export default function AddExpenseScreen() {
       });
       router.back();
     } catch (e) {
-      const errMsg = e?.response?.data?.category?.[0] || e?.response?.data?.detail || 'Failed to add transaction';
+      const errMsg = e?.response?.data?.detail || 'Failed to update transaction';
       Alert.alert('Error', errMsg);
     } finally {
       setLoading(false);
     }
   };
+
+  if (fetching) {
+    return (
+      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={{flex: 1,backgroundColor: '#F7F9FC'}} edges={['top']}>
@@ -146,10 +149,8 @@ export default function AddExpenseScreen() {
           <TouchableOpacity onPress={() => router.back()} style={{width: 40,height: 40,borderRadius: 12,backgroundColor: '#F3F4F6',justifyContent: 'center',alignItems: 'center'}}>
             <Ionicons name="arrow-back" size={24} color="#111827" />
           </TouchableOpacity>
-          <Text style={{fontSize: 18,fontWeight: '800',color: '#111827'}}>Add Transaction</Text>
-          <TouchableOpacity onPress={handleScanReceipt} disabled={scanning} style={{width: 40,height: 40,borderRadius: 12,backgroundColor: '#EFF6FF',justifyContent: 'center',alignItems: 'center'}}>
-            {scanning ? <ActivityIndicator size="small" color="#2563EB" /> : <Ionicons name="camera" size={24} color="#2563EB" />}
-          </TouchableOpacity>
+          <Text style={{fontSize: 18,fontWeight: '800',color: '#111827'}}>Edit Transaction</Text>
+          <View style={{ width: 40 }} />
         </View>
 
         <KeyboardAwareScrollView enableOnAndroid={true} extraScrollHeight={20} showsVerticalScrollIndicator={false} contentContainerStyle={{
@@ -249,8 +250,8 @@ export default function AddExpenseScreen() {
           >
             {loading ? <ActivityIndicator color="#FFF" /> : (
               <>
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                <Text style={{fontSize: 17,fontWeight: '700',color: '#FFFFFF'}}>Save Transaction</Text>
+                <Ionicons name="save" size={20} color="#FFFFFF" />
+                <Text style={{fontSize: 17,fontWeight: '700',color: '#FFFFFF'}}>Update Transaction</Text>
               </>
             )}
           </TouchableOpacity>

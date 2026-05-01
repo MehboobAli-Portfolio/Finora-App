@@ -2,6 +2,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ActivityIndicator, View } from 'react-native';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../services/queryClient';
 
 function RootLayoutNav() {
   const { user, loading } = useAuth();
@@ -30,9 +32,11 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <StatusBar style="light" />
-      <RootLayoutNav />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <StatusBar style="light" />
+        <RootLayoutNav />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

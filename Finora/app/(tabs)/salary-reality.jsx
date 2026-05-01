@@ -74,6 +74,7 @@ const AREAS = {
 };
 const FREQUENCIES = ['Daily','Weekly','Bi-Weekly','Monthly','Yearly'];
 const CURRENCIES  = ['PKR','USD','EUR','GBP','AED','SAR','CAD','AUD'];
+const INDUSTRIES  = ['it', 'finance', 'engineering', 'healthcare', 'education', 'government', 'other'];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 const fmtAmt = (n, cur = 'PKR') =>
@@ -269,6 +270,11 @@ export default function SalaryRealityScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(null);
 
+  // Career Profile
+  const [jobTitle,    setJobTitle]    = useState('');
+  const [industry,    setIndustry]    = useState('other');
+  const [experience,  setExperience]  = useState('0');
+
   const cityOptions = CITIES[state] || [];
   const areaOptions = AREAS[city]   || [];
   const effectiveArea = customArea.trim() || area;
@@ -276,12 +282,62 @@ export default function SalaryRealityScreen() {
   const onStateChange = (s) => { setStateVal(s); setCity(''); setArea(''); setCustomArea(''); };
   const onCityChange  = (c) => { setCity(c); setArea(''); setCustomArea(''); };
 
+  // Load profile on mount
+  React.useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const res = await salaryAPI.getProfile();
+      const p = res.data;
+      if (p.salary_amount > 0) {
+        setIncome(p.salary_amount.toString());
+        setCurrency(p.salary_currency);
+        setCity(p.city);
+        setJobTitle(p.job_title);
+        setIndustry(p.industry);
+        setExperience(p.experience_yrs.toString());
+        // Try to find state based on city
+        for (const [s, cities] of Object.entries(CITIES)) {
+          if (cities.includes(p.city)) {
+            setStateVal(s);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('No profile found or failed to load');
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setLoading(true);
+      await salaryAPI.updateProfile({
+        country: country === 'Pakistan' ? 'PK' : country.substring(0, 2).toUpperCase(),
+        city,
+        industry,
+        job_title: jobTitle,
+        experience_yrs: parseInt(experience) || 0,
+        salary_amount: parseFloat(income) || 0,
+        salary_currency: currency,
+      });
+      Alert.alert('Success', 'Career profile saved to your account!');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const validate = () => {
     if (!income || parseFloat(income) <= 0) {
       Alert.alert('Income Required', 'Please enter your income after deductions.'); return false;
     }
     return true;
   };
+
 
   const handleAnalyse = async () => {
     if (!validate()) return;
@@ -405,6 +461,41 @@ export default function SalaryRealityScreen() {
           {/* Divider */}
           <View style={styles.divider} />
 
+          {/* Section: Career Profile */}
+          <View style={styles.sectionHeader}>
+            <View style={[styles.sectionIcon, { backgroundColor: '#EEF2FF' }]}>
+              <Ionicons name="briefcase-outline" size={17} color={C.primary} />
+            </View>
+            <Text style={styles.sectionTitle}>Career Profile</Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>Job Title</Text>
+          <TextInput
+            value={jobTitle} onChangeText={setJobTitle}
+            placeholder="e.g. Senior Software Engineer"
+            placeholderTextColor="#9CA3AF"
+            style={styles.textInput}
+          />
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1.5 }}>
+              <FieldPicker label="Industry" value={industry} options={INDUSTRIES} onChange={setIndustry} icon="business-outline" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Exp (Yrs)</Text>
+              <TextInput
+                value={experience} onChangeText={setExperience}
+                placeholder="5"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="number-pad"
+                style={styles.textInput}
+              />
+            </View>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
           {/* Section: Income */}
           <View style={styles.sectionHeader}>
             <View style={[styles.sectionIcon, { backgroundColor: '#FFF7ED' }]}>
@@ -435,24 +526,37 @@ export default function SalaryRealityScreen() {
           </View>
 
           {/* Analyse Button */}
-          <TouchableOpacity
-            onPress={handleAnalyse} activeOpacity={0.86} disabled={loading}
-            style={styles.analyseBtn}
-          >
-            <LinearGradient
-              colors={['#4F46E5', '#7C3AED']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={styles.analyseBtnGrad}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            <TouchableOpacity
+              onPress={handleAnalyse} activeOpacity={0.86} disabled={loading}
+              style={[styles.analyseBtn, { flex: 2, marginTop: 0 }]}
             >
-              {loading
-                ? <ActivityIndicator color="#FFF" size="small" />
-                : <>
-                    <Ionicons name="analytics-outline" size={20} color="#FFF" />
-                    <Text style={styles.analyseBtnText}>Analyse Affordability</Text>
-                  </>
-              }
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#4F46E5', '#7C3AED']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={styles.analyseBtnGrad}
+              >
+                {loading
+                  ? <ActivityIndicator color="#FFF" size="small" />
+                  : <>
+                      <Ionicons name="analytics-outline" size={20} color="#FFF" />
+                      <Text style={styles.analyseBtnText}>Analyse</Text>
+                    </>
+                }
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleSaveProfile} activeOpacity={0.86} disabled={loading}
+              style={[styles.analyseBtn, { flex: 1, marginTop: 0 }]}
+            >
+              <View style={[styles.analyseBtnGrad, { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: C.primary }]}>
+                <Ionicons name="save-outline" size={18} color={C.primary} />
+                <Text style={[styles.analyseBtnText, { color: C.primary, fontSize: 13 }]}>Save Profile</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
         </View>
 
         {/* ── Results ── */}
