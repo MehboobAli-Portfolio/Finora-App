@@ -6,6 +6,9 @@ from .views import (
     HoldingDetailView,
     PriceHistoryListView,
     live_quote_view,
+    refresh_prices_view,
+    search_symbol_view,
+    investment_chart_view,
 )
 
 urlpatterns = [
@@ -17,6 +20,12 @@ urlpatterns = [
     path('holdings/<uuid:pk>/', HoldingDetailView.as_view(), name='holding-detail'),
     # Price history (for charts & AI)
     path('price-history/', PriceHistoryListView.as_view(), name='price-history'),
-    # Live price lookup
+    # Live price lookup (any symbol)
     path('quote/', live_quote_view, name='live-quote'),
+    # Refresh all market-tracked holdings
+    path('refresh-prices/', refresh_prices_view, name='refresh-prices'),
+    # Search for symbols
+    path('search/', search_symbol_view, name='search-symbol'),
+    # Chart data for symbol
+    path('chart/', investment_chart_view, name='investment-chart'),
 ]

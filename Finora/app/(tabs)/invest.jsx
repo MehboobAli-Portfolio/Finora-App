@@ -1,5 +1,5 @@
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, TouchableOpacity, RefreshControl, ActivityIndicator, Alert, Image } from 'react-native';
@@ -9,97 +9,90 @@ import { investmentsAPI } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { theme } from '../../theme';
 
-const TYPE_ICONS = {
-  stocks: 'stats-chart',
-  crypto: 'logo-bitcoin',
-  real_estate: 'business',
-  bonds: 'document-text',
-  mutual_funds: 'pie-chart',
-  etf: 'bar-chart',
-  gold: 'medal',
-  other: 'cash'
+const TYPE_META = {
+  stocks:       { icon: 'stats-chart',    color: '#2563EB',  label: 'Stocks' },
+  crypto:       { icon: 'logo-bitcoin',   color: '#F59E0B',  label: 'Crypto' },
+  real_estate:  { icon: 'business',       color: '#10B981',  label: 'Real Estate' },
+  bonds:        { icon: 'document-text',  color: '#6366F1',  label: 'Bonds' },
+  mutual_funds: { icon: 'pie-chart',      color: '#8B5CF6',  label: 'Mutual Funds' },
+  etf:          { icon: 'bar-chart',      color: '#3B82F6',  label: 'ETFs' },
+  gold:         { icon: 'medal',          color: '#D97706',  label: 'Gold' },
+  nft:          { icon: 'diamond',        color: '#EC4899',  label: 'NFT' },
+  other:        { icon: 'cash',           color: '#9CA3AF',  label: 'Other' },
 };
 
-const TYPE_COLORS = {
-  stocks: theme.colors.primary,
-  crypto: theme.colors.warning,
-  real_estate: theme.colors.secondary,
-  bonds: '#6366F1',
-  mutual_funds: '#8B5CF6',
-  etf: '#3B82F6',
-  gold: '#D97706',
-  other: theme.colors.textSecondary
-};
-
-const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-})}`;
+const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function InvestScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
 
   const { data: investments = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['investments'],
-    queryFn: async () => {
-      const res = await investmentsAPI.list();
-      return res.data;
-    }
+    queryFn: async () => { const res = await investmentsAPI.list(); return res.data; }
   });
 
-  useFocusEffect(useCallback(() => {
-    refetch();
-  }, []));
+  useFocusEffect(useCallback(() => { refetch(); }, []));
 
   const deleteMutation = useMutation({
     mutationFn: (id) => investmentsAPI.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['investments'] });
-    }
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['investments'] }),
   });
 
-  // Periodic refresh for live price updates (every 60s)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [refetch]);
-
   const handleDelete = id => {
-    Alert.alert('Delete Investment', 'Remove this investment?', [{
-      text: 'Cancel',
-      style: 'cancel'
-    }, {
-      text: 'Delete',
-      style: 'destructive',
-      onPress: () => deleteMutation.mutate(id)
-    }]);
+    Alert.alert('Delete Investment', 'Remove this investment?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate(id) },
+    ]);
   };
 
-  // Use the serializer-provided fields (amount, current_value)
+  // Refresh live prices
+  const handleRefreshPrices = async () => {
+    setRefreshing(true);
+    try {
+      const res = await investmentsAPI.refreshPrices();
+      const { updated, errors } = res.data;
+      queryClient.invalidateQueries({ queryKey: ['investments'] });
+      if (errors && errors.length > 0) {
+        Alert.alert('Prices Updated', `Updated ${updated} holdings.\n\nIssues:\n${errors.join('\n')}`);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to refresh prices');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const totalInvested = investments.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
   const totalValue = investments.reduce((s, i) => s + parseFloat(i.current_value || i.amount || 0), 0);
   const totalReturn = totalValue - totalInvested;
   const returnPct = totalInvested > 0 ? ((totalReturn / totalInvested) * 100).toFixed(2) : 0;
+
+  // Group by type
+  const grouped = {};
+  investments.forEach(inv => {
+    const t = inv.investment_type || 'other';
+    if (!grouped[t]) grouped[t] = [];
+    grouped[t].push(inv);
+  });
+  const groupOrder = ['stocks', 'crypto', 'etf', 'mutual_funds', 'bonds', 'gold', 'nft', 'real_estate', 'other'];
+  const sortedGroups = groupOrder.filter(t => grouped[t]?.length > 0);
+
+  const marketCount = investments.filter(i => i.is_market_tracked).length;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <LinearGradient
         colors={[theme.colors.primary, '#2563EB', '#3B82F6']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={[{ paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, zIndex: 10 }, { paddingTop: insets.top + 10 }]}
+        style={{ paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8, zIndex: 10, paddingTop: insets.top + 10 }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
           <View style={{ width: 80, height: 80, borderRadius: 15, backgroundColor: theme.colors.surface, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 }}>
-            <Image 
-              source={require('../../assets/icons/invest.png')} 
-              style={{ width: 80, height: 80, transform: [{ scale: 1.15 }] }} 
-              resizeMode="contain"
-            />
+            <Image source={require('../../assets/icons/invest.png')} style={{ width: 80, height: 80, transform: [{ scale: 1.15 }] }} resizeMode="contain" />
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 26, fontWeight: '900', color: theme.colors.surface, letterSpacing: -0.8 }}>Investments</Text>
             <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginTop: 2 }}>Grow your wealth over time.</Text>
           </View>
@@ -107,25 +100,34 @@ export default function InvestScreen() {
       </LinearGradient>
 
       {/* Portfolio Summary */}
-      <View style={{margin: 16,backgroundColor: '#1E3A8A',borderRadius: 22,padding: 22,shadowColor: '#1E3A8A',shadowOffset: {width: 0,height: 6},shadowOpacity: 0.3,shadowRadius: 12,elevation: 8}}>
-        <Text style={{fontSize: 13,color: 'rgba(255,255,255,0.8)',fontWeight: '600',marginBottom: 6}}>Total Portfolio Value</Text>
-        <Text style={{fontSize: 34,fontWeight: '800',color: theme.colors.surface,marginBottom: 16}}>{fmt(totalValue)}</Text>
-        <View style={{flexDirection: 'row',justifyContent: 'space-between',alignItems: 'center'}}>
+      <View style={{ margin: 16, backgroundColor: '#1E3A8A', borderRadius: 22, padding: 22, shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }}>
+        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 6 }}>Total Portfolio Value</Text>
+        <Text style={{ fontSize: 34, fontWeight: '800', color: theme.colors.surface, marginBottom: 16 }}>{fmt(totalValue)}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
-            <Text style={{fontSize: 12,color: 'rgba(255,255,255,0.6)',marginBottom: 2}}>Invested</Text>
-            <Text style={{fontSize: 16,fontWeight: '700',color: theme.colors.surface}}>{fmt(totalInvested)}</Text>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 2 }}>Invested</Text>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.surface }}>{fmt(totalInvested)}</Text>
           </View>
-          <View style={[{flexDirection: 'row',alignItems: 'center',gap: 4,paddingHorizontal: 12,paddingVertical: 8,borderRadius: 10}, { backgroundColor: totalReturn >= 0 ? '#D1FAE5' : '#FEE2E2' }]}>
-            <Ionicons
-              name={totalReturn >= 0 ? 'trending-up' : 'trending-down'}
-              size={16}
-              color={totalReturn >= 0 ? theme.colors.secondary : theme.colors.danger}
-            />
-            <Text style={[{fontSize: 15,fontWeight: '700'}, { color: totalReturn >= 0 ? theme.colors.secondary : theme.colors.danger }]}>
+          <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }, { backgroundColor: totalReturn >= 0 ? '#D1FAE5' : '#FEE2E2' }]}>
+            <Ionicons name={totalReturn >= 0 ? 'trending-up' : 'trending-down'} size={16} color={totalReturn >= 0 ? theme.colors.secondary : theme.colors.danger} />
+            <Text style={[{ fontSize: 15, fontWeight: '700' }, { color: totalReturn >= 0 ? theme.colors.secondary : theme.colors.danger }]}>
               {totalReturn >= 0 ? '+' : ''}{returnPct}%
             </Text>
           </View>
         </View>
+
+        {/* Refresh button */}
+        {marketCount > 0 && (
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingVertical: 10 }}
+            onPress={handleRefreshPrices} disabled={refreshing}
+          >
+            {refreshing ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="refresh" size={16} color="#FFF" />}
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF' }}>
+              {refreshing ? 'Refreshing...' : `Refresh Live Prices (${marketCount})`}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {isLoading ? (
@@ -133,49 +135,48 @@ export default function InvestScreen() {
       ) : (
         <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 20 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 160 }}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
         >
           {investments.length === 0 ? (
-            <View style={{alignItems: 'center',paddingVertical: 60}}>
+            <View style={{ alignItems: 'center', paddingVertical: 60 }}>
               <Ionicons name="trending-up-outline" size={48} color="#D1D5DB" />
-              <Text style={{fontSize: 18,fontWeight: '700',color: '#374151',marginTop: 16,marginBottom: 8}}>No investments</Text>
-              <Text style={{fontSize: 14,color: '#9CA3AF',textAlign: 'center',marginBottom: 24}}>Start building your investment portfolio</Text>
-              <TouchableOpacity style={{backgroundColor: theme.colors.primary,paddingHorizontal: 24,paddingVertical: 12,borderRadius: 12}} onPress={() => router.push('/add-investment')}>
-                <Text style={{color: theme.colors.surface,fontWeight: '700',fontSize: 14}}>+ Add Investment</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#374151', marginTop: 16, marginBottom: 8 }}>No investments</Text>
+              <Text style={{ fontSize: 14, color: '#9CA3AF', textAlign: 'center', marginBottom: 24 }}>Start building your investment portfolio</Text>
+              <TouchableOpacity style={{ backgroundColor: theme.colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }} onPress={() => router.push('/add-investment')}>
+                <Text style={{ color: theme.colors.surface, fontWeight: '700', fontSize: 14 }}>+ Add Investment</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View>
-              <Text style={{fontSize: 14,fontWeight: '700',color: '#6B7280',marginBottom: 12,textTransform: 'uppercase',letterSpacing: 0.5}}>{investments.length} Holding{investments.length !== 1 ? 's' : ''}</Text>
-              {investments.map(inv => (
-                <InvestCard key={inv.id} inv={inv} onDelete={() => handleDelete(inv.id)} />
-              ))}
+              {sortedGroups.map(typeKey => {
+                const meta = TYPE_META[typeKey] || TYPE_META.other;
+                const items = grouped[typeKey];
+                const groupValue = items.reduce((s, i) => s + parseFloat(i.current_value || i.amount || 0), 0);
+                return (
+                  <View key={typeKey} style={{ marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: `${meta.color}18`, justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name={meta.icon} size={14} color={meta.color} />
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#374151', flex: 1 }}>{meta.label}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#6B7280' }}>{fmt(groupValue)}</Text>
+                    </View>
+                    {items.map(inv => (
+                      <InvestCard key={inv.id} inv={inv} onDelete={() => handleDelete(inv.id)} />
+                    ))}
+                  </View>
+                );
+              })}
             </View>
           )}
         </KeyboardAwareScrollView>
       )}
 
-      {/* Floating Action Button */}
-      <TouchableOpacity 
-        style={{
-          position: 'absolute',
-          bottom: 140,
-          right: 20,
-          width: 64,
-          height: 64,
-          borderRadius: 32,
-          backgroundColor: theme.colors.primary,
-          justifyContent: 'center',
-          alignItems: 'center',
-          shadowColor: theme.colors.primary,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.4,
-          shadowRadius: 12,
-          elevation: 10
-        }}
-        activeOpacity={0.8}
-        onPress={() => router.push('/add-investment')}
+      {/* FAB */}
+      <TouchableOpacity
+        style={{ position: 'absolute', bottom: 140, right: 20, width: 64, height: 64, borderRadius: 32, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 10 }}
+        activeOpacity={0.8} onPress={() => router.push('/add-investment')}
       >
         <Ionicons name="add" size={32} color={theme.colors.surface} />
       </TouchableOpacity>
@@ -183,51 +184,74 @@ export default function InvestScreen() {
   );
 }
 
-function InvestCard({
-  inv,
-  onDelete
-}) {
-  // Fields now come properly from the serializer
-  const icon = TYPE_ICONS[inv.investment_type] || 'cash';
-  const color = TYPE_COLORS[inv.investment_type] || '#9CA3AF';
+function InvestCard({ inv, onDelete }) {
+  const meta = TYPE_META[inv.investment_type] || TYPE_META.other;
   const returnAmt = parseFloat(inv.return_amount || 0);
   const returnPct = parseFloat(inv.return_percentage || 0);
   const isPositive = returnAmt >= 0;
+  const isTracked = inv.is_market_tracked;
 
   return (
-    <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 16,marginBottom: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 4}}>
-      <View style={{flexDirection: 'row',alignItems: 'center',gap: 12,marginBottom: 14}}>
-        <View style={[{width: 46,height: 46,borderRadius: 14,justifyContent: 'center',alignItems: 'center'}, { backgroundColor: `${color}18` }]}>
-          <Ionicons name={icon} size={22} color={color} />
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => router.push(`/investment-detail/${inv.id}`)}
+      style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 4 }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <View style={[{ width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }, { backgroundColor: `${meta.color}18` }]}>
+          <Ionicons name={meta.icon} size={20} color={meta.color} />
         </View>
-        <View style={{flex: 1}}>
-          <Text style={{fontSize: 15,fontWeight: '700',color: '#111827'}}>{inv.name}</Text>
-          {inv.symbol ? <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '600'}}>{inv.symbol}</Text> : null}
-          <Text style={{fontSize: 11,color: '#9CA3AF',textTransform: 'capitalize',marginTop: 1}}>{(inv.investment_type || '').replace('_', ' ')}</Text>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }} numberOfLines={1}>{inv.name}</Text>
+            {isTracked && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />}
+          </View>
+          {inv.symbol && !inv.symbol.startsWith('MAN-') && !inv.symbol.startsWith('RE-') && !inv.symbol.startsWith('OT-') && (
+            <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '600' }}>{inv.symbol}</Text>
+          )}
         </View>
         <TouchableOpacity onPress={onDelete} style={{ padding: 6 }}>
           <Ionicons name="trash-outline" size={18} color="#D1D5DB" />
         </TouchableOpacity>
       </View>
 
-      <View style={{flexDirection: 'row',justifyContent: 'space-between',alignItems: 'center'}}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View>
-          <Text style={{fontSize: 11,color: '#9CA3AF',marginBottom: 2,fontWeight: '600'}}>Invested</Text>
-          <Text style={{fontSize: 14,fontWeight: '700',color: '#111827'}}>{`$${parseFloat(inv.amount || 0).toFixed(2)}`}</Text>
+          <Text style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2, fontWeight: '600' }}>Invested</Text>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{fmt(inv.amount)}</Text>
         </View>
         <View>
-          <Text style={{fontSize: 11,color: '#9CA3AF',marginBottom: 2,fontWeight: '600'}}>Current</Text>
-          <Text style={{fontSize: 14,fontWeight: '700',color: '#111827'}}>{`$${parseFloat(inv.current_value || inv.amount || 0).toFixed(2)}`}</Text>
+          <Text style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2, fontWeight: '600' }}>
+            {isTracked ? 'Market Value' : 'Current'}
+          </Text>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{fmt(inv.current_value || inv.amount)}</Text>
         </View>
-        <View style={[{paddingHorizontal: 10,paddingVertical: 6,borderRadius: 8,alignItems: 'center'}, { backgroundColor: isPositive ? '#D1FAE5' : '#FEE2E2' }]}>
-          <Text style={[{fontSize: 14,fontWeight: '800'}, { color: isPositive ? '#10B981' : '#EF4444' }]}>
+        <View style={[{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignItems: 'center' }, { backgroundColor: isPositive ? '#D1FAE5' : '#FEE2E2' }]}>
+          <Text style={[{ fontSize: 14, fontWeight: '800' }, { color: isPositive ? '#10B981' : '#EF4444' }]}>
             {isPositive ? '+' : ''}{returnPct.toFixed(2)}%
           </Text>
-          <Text style={[{fontSize: 11,fontWeight: '600'}, { color: isPositive ? '#10B981' : '#EF4444' }]}>
+          <Text style={[{ fontSize: 11, fontWeight: '600' }, { color: isPositive ? '#10B981' : '#EF4444' }]}>
             {isPositive ? '+' : ''}${Math.abs(returnAmt).toFixed(2)}
           </Text>
         </View>
       </View>
-    </View>
+
+      {/* Extra info for real estate */}
+      {inv.monthly_income > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
+          <Ionicons name="cash-outline" size={14} color="#10B981" />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>{fmt(inv.monthly_income)}/month</Text>
+        </View>
+      )}
+
+      {/* Quantity info for tracked assets */}
+      {isTracked && parseFloat(inv.quantity) !== 1 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+          <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
+            {parseFloat(inv.quantity).toFixed(inv.quantity % 1 !== 0 ? 6 : 0)} units @ ${parseFloat(inv.unit_price || 0).toFixed(2)}/unit
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 }

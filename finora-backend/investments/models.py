@@ -10,6 +10,10 @@ class Asset(models.Model):
         ('forex', 'Forex'),
         ('etf', 'ETF'),
         ('commodity', 'Commodity'),
+        ('nft', 'NFT'),
+        ('bond', 'Bond'),
+        ('mutual_fund', 'Mutual Fund'),
+        ('real_estate', 'Real Estate'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -33,6 +37,7 @@ class Holding(models.Model):
     current_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     unrealized_pnl = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     notes = models.TextField(null=True, blank=True)
+    monthly_income = models.DecimalField(max_digits=18, decimal_places=2, default=0, help_text='Monthly passive income (e.g. rent)')
     purchase_date = models.DateField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
 

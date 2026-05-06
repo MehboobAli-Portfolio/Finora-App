@@ -52,16 +52,21 @@ def dashboard_view(request):
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    # Transaction aggregation (replaces old Expense queries)
-    total_income = Transaction.objects.filter(
+    # Monthly Transaction aggregation
+    monthly_income = Transaction.objects.filter(
         user=user, date__gte=month_start, txn_type='income'
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    total_expenses = Transaction.objects.filter(
+    monthly_expenses = Transaction.objects.filter(
         user=user, date__gte=month_start, txn_type='expense'
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # Portfolio value — uses the market_value property on Holding
+    # Cumulative Balance
+    total_in = Transaction.objects.filter(user=user, txn_type='income').aggregate(total=Sum('amount'))['total'] or 0
+    total_ex = Transaction.objects.filter(user=user, txn_type='expense').aggregate(total=Sum('amount'))['total'] or 0
+    balance = float(total_in) - float(total_ex)
+
+    # Portfolio value
     holdings = Holding.objects.filter(user=user)
     total_investments = sum(h.market_value for h in holdings)
 
@@ -73,15 +78,14 @@ def dashboard_view(request):
     recent_transactions = Transaction.objects.filter(user=user).order_by('-date')[:5]
     recent_data = TransactionSerializer(recent_transactions, many=True).data
 
-    balance = float(total_income) - float(total_expenses)
-
     return Response({
         'balance': balance,
-        'total_income': float(total_income),
-        'total_expenses': float(total_expenses),
+        'total_income': float(monthly_income),
+        'total_expenses': float(monthly_expenses),
         'total_investments': total_investments,
         'goals_count': goals_count,
         'completed_goals': completed_goals,
         'monthly_budget': float(user.monthly_budget),
         'recent_transactions': recent_data,
     })
+

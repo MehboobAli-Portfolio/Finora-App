@@ -7,12 +7,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { aiAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AiScreen() {
   const insets = useSafeAreaInsets();
-  const [messages, setMessages] = useState([
-    { id: 1, text: "Hello! I'm your Finora AI Coach. How can I help you today?", sender: 'bot' }
-  ]);
+  const { user } = useAuth();
+  const [messages, setMessages] = useState([{
+    id: '1',
+    role: 'bot',
+    text: `Hello ${user?.full_name || user?.username || 'there'}! I am your Finora AI Neural Coach. Ask me anything about your budget, goals, spending, or get general financial advice.`
+  }]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
@@ -43,13 +47,21 @@ export default function AiScreen() {
   }, []);
 
   const handleSend = async () => {
-    if (!inputText.trim() || loading) return;
-    const userMsg = { id: Date.now(), text: inputText.trim(), sender: 'user' };
+    const text = inputText.trim();
+    if (!text || loading) return;
+
+    const userMsg = {
+      id: Date.now().toString(),
+      role: 'user',
+      text
+    };
+
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
     setLoading(true);
+
     try {
-      const response = await aiAPI.chat(userMsg.text, conversationId);
+      const response = await aiAPI.chat(text, conversationId);
       const data = response.data;
       
       if (data.conversation_id && !conversationId) {
@@ -57,16 +69,16 @@ export default function AiScreen() {
       }
       
       setMessages(prev => [...prev, { 
-        id: Date.now() + 1, 
+        id: (Date.now() + 1).toString(), 
         text: data.reply, 
-        sender: 'bot',
+        role: 'bot',
         intent: data.intent 
       }]);
     } catch (e) {
       setMessages(prev => [...prev, { 
-        id: Date.now() + 2, 
+        id: (Date.now() + 2).toString(), 
         text: "I'm having a connection issue. Please try again.", 
-        sender: 'bot' 
+        role: 'bot' 
       }]);
     } finally { setLoading(false); }
   };
@@ -101,9 +113,9 @@ export default function AiScreen() {
           keyboardDismissMode="interactive"
         >
           {messages.map((msg) => (
-            <View key={msg.id} style={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginBottom: 16 }}>
-              <View style={[{ padding: 16, borderRadius: 20 }, msg.sender === 'user' ? { backgroundColor: '#2563EB', borderBottomRightRadius: 4 } : { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 }]}>
-                <Text style={{ fontSize: 15, lineHeight: 22, color: msg.sender === 'user' ? '#FFFFFF' : '#334155', fontWeight: '500' }}>{msg.text}</Text>
+            <View key={msg.id} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginBottom: 16 }}>
+              <View style={[{ padding: 16, borderRadius: 20 }, msg.role === 'user' ? { backgroundColor: '#2563EB', borderBottomRightRadius: 4 } : { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 }]}>
+                <Text style={{ fontSize: 15, lineHeight: 22, color: msg.role === 'user' ? '#FFFFFF' : '#334155', fontWeight: '500' }}>{msg.text}</Text>
               </View>
             </View>
           ))}

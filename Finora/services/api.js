@@ -105,12 +105,16 @@ export const goalsAPI = {
 // Investments
 export const investmentsAPI = {
   list: (params) => api.get('investments/holdings/', { params }),
+  get: (id) => api.get(`investments/holdings/${id}/`),
   create: (data) => api.post('investments/holdings/', data),
   update: (id, data) => api.put(`investments/holdings/${id}/`, data),
   delete: (id) => api.delete(`investments/holdings/${id}/`),
   assets: (params) => api.get('investments/assets/', { params }),
   priceHistory: (params) => api.get('investments/price-history/', { params }),
   getQuote: (symbol) => api.get(`investments/quote/?symbol=${symbol}`),
+  getChartData: (symbol) => api.get(`investments/chart/?symbol=${symbol}`),
+  refreshPrices: () => api.post('investments/refresh-prices/'),
+  searchSymbol: (query) => api.get(`investments/search/?q=${query}`),
 };
 
 // AI Coach
