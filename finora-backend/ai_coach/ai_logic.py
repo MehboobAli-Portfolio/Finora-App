@@ -1,14 +1,9 @@
 import json
-import torch
 import os
 import re
 import time
-import yfinance as yf
 
 from transactions.models import Transaction
-
-from .ai_model.ml_model import FinoraNet
-from .ai_model.intent_sklearn import predict_intent_sklearn, sklearn_intent_available
 
 # Intent routing: absolute confidence and top1-top2 margin (see plan).
 SKLEARN_MIN_CONF = 0.28
@@ -32,6 +27,7 @@ def get_market_data():
         return _MARKET_CACHE
 
     try:
+        import yfinance as yf
         # Use a smaller timeout for yfinance if possible, or just accept the background fetch
         spy = yf.Ticker("SPY").fast_info
         btc = yf.Ticker("BTC-USD").fast_info
@@ -58,6 +54,9 @@ class FinoraAI:
 
     @classmethod
     def load_model(cls):
+        import torch
+        from .ai_model.ml_model import FinoraNet
+
         if cls._model is not None and cls._meta is not None:
             return
 
@@ -218,6 +217,10 @@ class FinoraAI:
 
     def process_chat_message(self, message: str, chat_history: list = None) -> tuple:
         """Classifies intent, extracts entities, and returns (response, intent, entities)."""
+        import torch
+        import yfinance as yf
+        from .ai_model.intent_sklearn import predict_intent_sklearn, sklearn_intent_available
+
         entities = {}
         
         ticker = self._extract_ticker(message)

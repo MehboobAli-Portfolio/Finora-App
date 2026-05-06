@@ -31,7 +31,11 @@ class GoalDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Goal.objects.filter(user=self.request.user)
+        print(f"DEBUG: GoalDetailView user={self.request.user} authenticated={self.request.user.is_authenticated}")
+        qs = Goal.objects.filter(user=self.request.user)
+        print(f"DEBUG: GoalDetailView queryset count={qs.count()}")
+        return qs
+
 
 
 class GoalDepositListCreateView(generics.ListCreateAPIView):
