@@ -1,42 +1,108 @@
+import uuid
 from django.db import models
 from django.conf import settings
 
 
-class Investment(models.Model):
-    INVESTMENT_TYPES = [
-        ('stocks', 'Stocks'),
+class Asset(models.Model):
+    ASSET_TYPE_CHOICES = [
+        ('stock', 'Stock'),
         ('crypto', 'Cryptocurrency'),
-        ('real_estate', 'Real Estate'),
-        ('bonds', 'Bonds'),
-        ('mutual_funds', 'Mutual Funds'),
+        ('forex', 'Forex'),
         ('etf', 'ETF'),
-        ('gold', 'Gold'),
-        ('other', 'Other'),
+        ('commodity', 'Commodity'),
+        ('nft', 'NFT'),
+        ('bond', 'Bond'),
+        ('mutual_fund', 'Mutual Fund'),
+        ('real_estate', 'Real Estate'),
     ]
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='investments')
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    symbol = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=200)
-    symbol = models.CharField(max_length=20, blank=True)
-    investment_type = models.CharField(max_length=20, choices=INVESTMENT_TYPES, default='stocks')
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    current_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    purchase_date = models.DateField()
-    description = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-purchase_date']
-
-    @property
-    def return_amount(self):
-        return float(self.current_value) - float(self.amount)
-
-    @property
-    def return_percentage(self):
-        if self.amount == 0:
-            return 0
-        return round(((float(self.current_value) - float(self.amount)) / float(self.amount)) * 100, 2)
+    asset_type = models.CharField(max_length=20, choices=ASSET_TYPE_CHOICES)
+    exchange = models.CharField(max_length=50)
+    sector = models.CharField(max_length=100, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.user.email} - {self.name}"
+        return f"{self.name} ({self.symbol})"
+
+
+class Holding(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='holdings')
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='holders')
+    quantity = models.DecimalField(max_digits=18, decimal_places=8)
+    avg_buy_price = models.DecimalField(max_digits=18, decimal_places=8)
+    current_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    unrealized_pnl = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    notes = models.TextField(null=True, blank=True)
+    monthly_income = models.DecimalField(max_digits=18, decimal_places=2, default=0, help_text='Monthly passive income (e.g. rent)')
+    purchase_date = models.DateField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'asset')
+
+    @property
+    def market_value(self):
+        """Total current market value = quantity × current_price"""
+        qty = self.quantity or 0
+        price = self.current_price or 0
+        return float(qty * price)
+
+    @property
+    def total_invested(self):
+        """Total invested = quantity × avg_buy_price"""
+        qty = self.quantity or 0
+        buy = self.avg_buy_price or 0
+        return float(qty * buy)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.asset.symbol}"
+
+
+class PriceHistory(models.Model):
+    INTERVAL_CHOICES = [
+        ('1m', '1 Minute'),
+        ('1h', '1 Hour'),
+        ('1d', '1 Day'),
+        ('1w', '1 Week'),
+    ]
+
+    # BigAutoField as requested for fast inserts
+    id = models.BigAutoField(primary_key=True)
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='prices')
+    open = models.DecimalField(max_digits=18, decimal_places=8)
+    high = models.DecimalField(max_digits=18, decimal_places=8)
+    low = models.DecimalField(max_digits=18, decimal_places=8)
+    close = models.DecimalField(max_digits=18, decimal_places=8)
+    volume = models.BigIntegerField()
+    interval = models.CharField(max_length=5, choices=INTERVAL_CHOICES)
+    recorded_at = models.DateTimeField(db_index=True)
+
+    # Technical Indicators (Phase 3)
+    rsi = models.FloatField(null=True, blank=True)
+    macd = models.FloatField(null=True, blank=True)
+    macd_signal = models.FloatField(null=True, blank=True)
+    macd_hist = models.FloatField(null=True, blank=True)
+    ema_20 = models.FloatField(null=True, blank=True)
+    ema_50 = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-recorded_at']
+        indexes = [
+            models.Index(fields=['asset', 'interval', 'recorded_at']),
+        ]
+        verbose_name_plural = "Price histories"
+
+
+class TrainingQueueItem(models.Model):
+    data_type = models.CharField(max_length=50) # 'price_update', 'news', 'user_interaction'
+    content = models.JSONField()               # The actual training example
+    processed = models.BooleanField(default=False)
+    quality_score = models.FloatField(default=0.0) # Filter low-quality data
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.data_type}] Processed: {self.processed} - Score: {self.quality_score}"

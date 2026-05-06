@@ -6,13 +6,14 @@ from rest_framework import status
 from django.utils import timezone
 from django.db.models import Sum
 
-from expenses.models import Expense
-from expenses.serializers import ExpenseSerializer
+from transactions.models import Transaction
+from transactions.serializers import TransactionSerializer
 from goals.models import Goal
-from investments.models import Investment
-from investments.serializers import InvestmentSerializer
+from investments.serializers import HoldingSerializer
+from investments.models import Holding
 
 from .ai_logic import FinoraAI
+from .models import AIConversation, AIMessage
 
 
 def _get_month_start():
@@ -27,22 +28,22 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
     month_start = _get_month_start()
 
     expense_only = (
-        Expense.objects.filter(user=user, date__gte=month_start, transaction_type='expense')
+        Transaction.objects.filter(user=user, date__gte=month_start, txn_type='expense')
         .aggregate(total=Sum('amount'))['total'] or 0
     )
     total_income = (
-        Expense.objects.filter(user=user, date__gte=month_start, transaction_type='income')
+        Transaction.objects.filter(user=user, date__gte=month_start, txn_type='income')
         .aggregate(total=Sum('amount'))['total'] or 0
     )
     balance       = float(total_income) - float(expense_only)
     goals_count   = Goal.objects.filter(user=user).count()
-    completed     = Goal.objects.filter(user=user, is_completed=True).count()
-    active_goals  = list(Goal.objects.filter(user=user, is_completed=False))
+    completed     = Goal.objects.filter(user=user, status='completed').count()
+    active_goals  = list(Goal.objects.filter(user=user, status='active'))
 
     spending_by_category = []
     if include_categories:
         rows = (
-            Expense.objects.filter(user=user, date__gte=month_start, transaction_type='expense')
+            Transaction.objects.filter(user=user, date__gte=month_start, txn_type='expense')
             .values('category')
             .annotate(total=Sum('amount'))
             .order_by('-total')[:5]
@@ -53,20 +54,20 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
 
     recent_transactions = []
     if include_recent:
-        qs = Expense.objects.filter(user=user).order_by('-date')[:12]
-        recent_transactions = ExpenseSerializer(qs, many=True).data
+        qs = Transaction.objects.filter(user=user).order_by('-date')[:12]
+        recent_transactions = TransactionSerializer(qs, many=True).data
 
     investments = []
     if include_investments:
-        inv_qs = Investment.objects.filter(user=user).order_by('-purchase_date')[:15]
-        investments = InvestmentSerializer(inv_qs, many=True).data
+        inv_qs = Holding.objects.filter(user=user).order_by('-last_updated')[:15]
+        investments = HoldingSerializer(inv_qs, many=True).data
 
     return FinoraAI(
         user=user,
         balance=balance,
         income=total_income,
         expenses=expense_only,
-        budget=float(user.monthly_budget),
+        budget=float(user.monthly_budget or 0),
         goals_count=goals_count,
         completed_goals=completed,
         recent_transactions=recent_transactions,
@@ -98,13 +99,41 @@ def insight_view(request):
 def chat_view(request):
     """
     POST /api/ai/chat/
-    Body: { "message": "..." }
-    Returns: { "reply": "..." }
+    Body: { "message": "...", "conversation_id": "optional-uuid" }
+    Returns: { "reply": "...", "intent": "...", "conversation_id": "..." }
     Full context: categories, recent transactions, investments.
     """
-    message = request.data.get('message', '').strip()
-    if not message:
+    message_text = request.data.get('message', '').strip()
+    if not message_text:
         return Response({'error': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    conversation_id = request.data.get('conversation_id')
+    
+    if conversation_id:
+        try:
+            conversation = AIConversation.objects.get(id=conversation_id, user=request.user)
+        except AIConversation.DoesNotExist:
+            return Response({'error': 'Conversation not found'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        conversation = AIConversation.objects.create(
+            user=request.user,
+            title=message_text[:50] + "..." if len(message_text) > 50 else message_text
+        )
+
+    # Save User Message
+    user_msg = AIMessage.objects.create(
+        conversation=conversation,
+        user=request.user,
+        role='user',
+        content=message_text
+    )
+
+    # Fetch last 15 messages for context
+    recent_messages = conversation.messages.order_by('-created_at')[:15]
+    chat_history = [
+        {"role": m.role, "content": m.content, "intent": m.intent}
+        for m in reversed(recent_messages)
+    ]
 
     try:
         engine = _build_ai_engine(
@@ -113,7 +142,56 @@ def chat_view(request):
             include_categories=True,
             include_recent=True,
         )
-        reply = engine.process_chat_message(message)
-        return Response({'reply': reply})
+        reply, intent, entities = engine.process_chat_message(message_text, chat_history=chat_history)
+        
+        # Save Assistant Reply
+        AIMessage.objects.create(
+            conversation=conversation,
+            user=request.user,
+            role='assistant',
+            content=reply,
+            intent=intent,
+            entities=entities
+        )
+        
+        return Response({
+            'reply': reply,
+            'intent': intent,
+            'entities': entities,
+            'conversation_id': conversation.id
+        })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def chat_history_view(request):
+    """
+    GET /api/ai/chat/history/
+    Returns all user conversations with their messages.
+    """
+    conversations = AIConversation.objects.filter(user=request.user).order_by('-last_active')
+    data = []
+    for conv in conversations:
+        messages = conv.messages.order_by('created_at')
+        msg_data = [
+            {
+                'id': msg.id,
+                'role': msg.role,
+                'content': msg.content,
+                'intent': msg.intent,
+                'entities': msg.entities,
+                'created_at': msg.created_at
+            } for msg in messages
+        ]
+        data.append({
+            'id': conv.id,
+            'title': conv.title,
+            'started_at': conv.started_at,
+            'last_active': conv.last_active,
+            'messages': msg_data
+        })
+    return Response(data)

@@ -1,13 +1,9 @@
 import json
-import torch
 import os
 import re
-import yfinance as yf
+import time
 
-from expenses.models import Expense
-
-from .ai_model.ml_model import FinoraNet
-from .ai_model.intent_sklearn import predict_intent_sklearn, sklearn_intent_available
+from transactions.models import Transaction
 
 # Intent routing: absolute confidence and top1-top2 margin (see plan).
 SKLEARN_MIN_CONF = 0.28
@@ -15,23 +11,41 @@ SKLEARN_MIN_MARGIN = 0.06
 TORCH_MIN_CONF = 0.22
 TORCH_MIN_MARGIN = 0.04
 
-_CATEGORY_LABELS = dict(Expense.CATEGORY_CHOICES)
+_CATEGORY_LABELS = dict(Transaction.CATEGORY_CHOICES)
 
+
+_MARKET_CACHE = None
+_MARKET_CACHE_TIME = 0
+_CACHE_EXPIRY = 300 # 5 minutes
 
 def get_market_data():
+    global _MARKET_CACHE, _MARKET_CACHE_TIME
+    now = time.time()
+    
+    # Return cached data if valid
+    if _MARKET_CACHE and (now - _MARKET_CACHE_TIME < _CACHE_EXPIRY):
+        return _MARKET_CACHE
+
     try:
+        import yfinance as yf
+        # Use a smaller timeout for yfinance if possible, or just accept the background fetch
         spy = yf.Ticker("SPY").fast_info
         btc = yf.Ticker("BTC-USD").fast_info
         qqq = yf.Ticker("QQQ").fast_info
         gold = yf.Ticker("GC=F").fast_info
-        return {
+        
+        data = {
             "spy_price": spy.last_price,
             "btc_price": btc.last_price,
             "qqq_price": qqq.last_price,
             "gold_price": gold.last_price,
         }
+        
+        _MARKET_CACHE = data
+        _MARKET_CACHE_TIME = now
+        return data
     except Exception:
-        return None
+        return _MARKET_CACHE # Return stale cache on failure rather than None if possible
 
 
 class FinoraAI:
@@ -40,6 +54,9 @@ class FinoraAI:
 
     @classmethod
     def load_model(cls):
+        import torch
+        from .ai_model.ml_model import FinoraNet
+
         if cls._model is not None and cls._meta is not None:
             return
 
@@ -61,6 +78,12 @@ class FinoraAI:
         cls._model = FinoraNet(input_size, hidden_size, output_size).to(device)
         cls._model.load_state_dict(torch.load(model_path, map_location=device))
         cls._model.eval()
+
+    @property
+    def market_data(self):
+        if self._market_data is None:
+            self._market_data = get_market_data()
+        return self._market_data
 
     def __init__(
         self,
@@ -89,7 +112,7 @@ class FinoraAI:
         self.active_goals = active_goals or []
         self.spending_by_category = spending_by_category or []
         self.investments = investments or []
-        self.market_data = get_market_data()
+        self._market_data = None # Lazy loaded
 
         score = 100
         surplus = self.income - self.expenses
@@ -124,7 +147,7 @@ class FinoraAI:
                 goal = self.active_goals[0]
                 dist = float(goal.target_amount - goal.current_amount)
                 months = dist / surplus
-                return f"Health Score: {self.health_score}/100. Track Forecast: With your current surplus of ${surplus:,.2f}/month, if you focus entirely on your '{goal.title}' goal, you will complete it in just {months:.1f} months!"
+                return f"Health Score: {self.health_score}/100. Track Forecast: With your current surplus of ${surplus:,.2f}/month, if you focus entirely on your '{goal.name}' goal, you will complete it in just {months:.1f} months!"
             return f"Health Score: {self.health_score}/100. Doing well: You have a surplus of ${surplus:,.2f}. Consider opening a savings goal to direct this cash effectively, like an Emergency Fund."
 
         else:
@@ -156,6 +179,16 @@ class FinoraAI:
             return matches[0]
         return None
 
+    def _extract_amount(self, message):
+        # Extract things like $500, 500 dollars, 500.00
+        match = re.search(r'\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:dollars|bucks)?\b', message, re.IGNORECASE)
+        if match:
+            try:
+                return float(match.group(1).replace(',', ''))
+            except ValueError:
+                return None
+        return None
+
     def _category_breakdown_text(self):
         if not self.spending_by_category:
             return ""
@@ -172,35 +205,54 @@ class FinoraAI:
             return ""
         lines = []
         for t in self.txs[:limit]:
-            title = t.get("title") or "Entry"
+            desc = t.get("description") or "Entry"
             amt = float(t.get("amount") or 0)
             cat = t.get("category") or "other"
             label = _CATEGORY_LABELS.get(cat, cat)
-            tt = t.get("transaction_type") or "expense"
+            tt = t.get("txn_type") or "expense"
             d = t.get("date") or ""
             sign = "+" if tt == "income" else "-"
-            lines.append(f"- {d} {title} ({label}) {sign}${amt:,.2f}")
+            lines.append(f"- {d} {desc} ({label}) {sign}${amt:,.2f}")
         return "\nRecent activity from your ledger:\n" + "\n".join(lines)
 
-    def process_chat_message(self, message: str) -> str:
-        """Classifies intent (sklearn TF-IDF if available, else PyTorch BoW) and fills templates."""
+    def process_chat_message(self, message: str, chat_history: list = None) -> tuple:
+        """Classifies intent, extracts entities, and returns (response, intent, entities)."""
+        import torch
+        import yfinance as yf
+        from .ai_model.intent_sklearn import predict_intent_sklearn, sklearn_intent_available
+
+        entities = {}
+        
+        ticker = self._extract_ticker(message)
+        if ticker:
+            entities['ticker'] = ticker
+
+        amount = self._extract_amount(message)
+        if amount is not None:
+            entities['amount'] = amount
 
         ticker = self._extract_ticker(message)
         if ticker:
             try:
-                info = yf.Ticker(ticker).fast_info
-                price = info.last_price
-                prev_close = info.previous_close
-                change = ((price - prev_close) / prev_close) * 100
-                direction = "📈 Up" if change >= 0 else "📉 Down"
-                return (
-                    f"Live Market Data Explorer 🌐:\n{ticker} is {direction} and currently trading at "
-                    f"~${price:,.2f} ({change:+.2f}% today).\n\n"
-                    f"If you believe in the long-term fundamentals of {ticker}, maintaining a balanced portfolio "
-                    "approach and using Dollar Cost Averaging with your available surplus can be highly effective. "
-                    "How else can I help?"
-                )
-            except Exception:
+                ticker_obj = yf.Ticker(ticker)
+                info = ticker_obj.fast_info
+                price = getattr(info, 'last_price', None)
+                prev_close = getattr(info, 'previous_close', None)
+                
+                if price and prev_close:
+                    change = ((price - prev_close) / prev_close) * 100
+                    direction = "📈 Up" if change >= 0 else "📉 Down"
+                    return (
+                        f"Live Market Data Explorer 🌐:\n{ticker} is {direction} and currently trading at "
+                        f"~${price:,.2f} ({change:+.2f}% today).\n\n"
+                        f"If you believe in the long-term fundamentals of {ticker}, maintaining a balanced portfolio "
+                        "approach and using Dollar Cost Averaging with your available surplus can be highly effective. "
+                        "How else can I help?",
+                        "market_status",
+                        entities
+                    )
+            except Exception as e:
+                print(f"YFinance error for {ticker}: {e}")
                 pass
 
         intent = None
@@ -247,10 +299,20 @@ class FinoraAI:
         if intent == "unknown":
             return (
                 "Could you rephrase that? I'm highly trained to discuss your budget, goals, current balance, "
-                "spending habits, portfolio, and live market trends!"
+                "spending habits, portfolio, and live market trends!",
+                intent,
+                entities
             )
 
-        return self._generate_response(intent)
+        # Basic context awareness from history
+        if chat_history and len(chat_history) > 0:
+            last_msg = chat_history[-1]
+            last_intent = last_msg.get("intent") or ""
+            if "market_status" in last_intent and intent == "investing_advice":
+                # slightly context-aware response modification
+                pass
+
+        return (self._generate_response(intent), intent, entities)
 
     def _fallback_keyword_matcher(self, text):
         if any(w in text for w in ["portfolio", "holdings", "my investments", "my stocks", "positions"]):
@@ -345,14 +407,14 @@ class FinoraAI:
                         continue
                     months = rem / split_surplus
                     base_msg += (
-                        f"🎯 **{g.title}**: Remaining ${rem:,.2f}. By directing your equal share "
+                        f"🎯 **{g.name}**: Remaining ${rem:,.2f}. By directing your equal share "
                         f"(${split_surplus:,.2f}/mo) toward this, you'll reach it in **{months:.1f} months**!\n"
                     )
             else:
                 base_msg += "Currently, your expenses are limiting your ability to save. Let's look at your remaining targets:\n\n"
                 for g in self.active_goals:
                     rem = float(g.target_amount - g.current_amount)
-                    base_msg += f"- {g.title}: ${rem:,.2f} left.\n"
+                    base_msg += f"- {g.name}: ${rem:,.2f} left.\n"
                 base_msg += "\nTry to cut back your discretionary spending this week to unlock savings momentum."
 
             return base_msg

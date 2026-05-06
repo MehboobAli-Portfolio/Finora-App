@@ -1,12 +1,317 @@
+import uuid as uuid_lib
+from decimal import Decimal
 from rest_framework import serializers
-from .models import Investment
+from django.db import IntegrityError
+from .models import Asset, Holding, PriceHistory
 
 
-class InvestmentSerializer(serializers.ModelSerializer):
-    return_amount = serializers.ReadOnlyField()
-    return_percentage = serializers.ReadOnlyField()
+class AssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = '__all__'
+
+
+class HoldingSerializer(serializers.ModelSerializer):
+    # ── Read-only fields the frontend expects ──────────────────────────
+    asset_details = AssetSerializer(source='asset', read_only=True)
+    name = serializers.SerializerMethodField(read_only=True)
+    symbol = serializers.SerializerMethodField(read_only=True)
+    investment_type = serializers.SerializerMethodField(read_only=True)
+    amount = serializers.SerializerMethodField(read_only=True)
+    current_value = serializers.SerializerMethodField(read_only=True)
+    return_amount = serializers.SerializerMethodField(read_only=True)
+    return_percentage = serializers.SerializerMethodField(read_only=True)
+    is_market_tracked = serializers.SerializerMethodField(read_only=True)
+    unit_price = serializers.SerializerMethodField(read_only=True)
+
+    # ── Write-only fields from the frontend form ───────────────────────
+    input_name = serializers.CharField(write_only=True, required=False, allow_blank=True, source='_name')
+    input_symbol = serializers.CharField(write_only=True, required=False, allow_blank=True, source='_symbol')
+    input_investment_type = serializers.CharField(write_only=True, required=False, allow_blank=True, source='_investment_type')
+    input_amount = serializers.DecimalField(max_digits=18, decimal_places=2, write_only=True, required=False, allow_null=True, source='_amount')
+    input_current_value = serializers.DecimalField(max_digits=18, decimal_places=2, write_only=True, required=False, allow_null=True, source='_current_value')
+    input_quantity = serializers.DecimalField(max_digits=18, decimal_places=8, write_only=True, required=False, allow_null=True, source='_quantity')
+    input_buy_price = serializers.DecimalField(max_digits=18, decimal_places=8, write_only=True, required=False, allow_null=True, source='_buy_price')
+    input_purchase_date = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True, source='_purchase_date')
+    input_description = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True, source='_description')
+    input_monthly_income = serializers.DecimalField(max_digits=18, decimal_places=2, write_only=True, required=False, allow_null=True, source='_monthly_income')
 
     class Meta:
-        model = Investment
+        model = Holding
+        fields = [
+            'id', 'user', 'asset', 'asset_details',
+            'quantity', 'avg_buy_price', 'current_price', 'unrealized_pnl',
+            'notes', 'monthly_income', 'purchase_date', 'last_updated',
+            # Read-only computed fields for frontend
+            'name', 'symbol', 'investment_type',
+            'amount', 'current_value', 'return_amount', 'return_percentage',
+            'is_market_tracked', 'unit_price',
+            # Write-only input fields from frontend form
+            'input_name', 'input_symbol', 'input_investment_type',
+            'input_amount', 'input_current_value', 'input_quantity', 'input_buy_price',
+            'input_purchase_date', 'input_description', 'input_monthly_income',
+        ]
+        read_only_fields = (
+            'id', 'user', 'last_updated', 'asset',
+            'quantity', 'avg_buy_price', 'current_price', 'unrealized_pnl',
+        )
+
+    # ── Read helpers ───────────────────────────────────────────────────
+
+    def get_name(self, obj):
+        return obj.asset.name if obj.asset else 'Unknown'
+
+    def get_symbol(self, obj):
+        return obj.asset.symbol if obj.asset else ''
+
+    def get_investment_type(self, obj):
+        """Reverse-map asset_type back to frontend investment_type."""
+        if obj.asset and obj.asset.exchange == 'MANUAL':
+            sym = obj.asset.symbol or ''
+            if sym.startswith('MF-'):
+                return 'mutual_funds'
+            if sym.startswith('RE-'):
+                return 'real_estate'
+            if sym.startswith('BD-'):
+                return 'bonds'
+            if sym.startswith('OT-'):
+                return 'other'
+            if sym.startswith('NFT-'):
+                return 'nft'
+
+        reverse_map = {
+            'stock': 'stocks',
+            'crypto': 'crypto',
+            'forex': 'stocks',
+            'etf': 'etf',
+            'commodity': 'gold',
+            'nft': 'nft',
+            'bond': 'bonds',
+            'mutual_fund': 'mutual_funds',
+            'real_estate': 'real_estate',
+        }
+        asset_type = obj.asset.asset_type if obj.asset else 'stock'
+        return reverse_map.get(asset_type, 'stocks')
+
+    def get_amount(self, obj):
+        """Total invested amount (what the user paid)."""
+        return float(obj.quantity * obj.avg_buy_price)
+
+    def get_current_value(self, obj):
+        """Current market value."""
+        return float(obj.quantity * obj.current_price)
+
+    def get_return_amount(self, obj):
+        """Profit/loss in absolute terms."""
+        invested = float(obj.quantity * obj.avg_buy_price)
+        current = float(obj.quantity * obj.current_price)
+        return round(current - invested, 2)
+
+    def get_return_percentage(self, obj):
+        """Profit/loss as a percentage."""
+        invested = float(obj.quantity * obj.avg_buy_price)
+        if invested == 0:
+            return 0.0
+        current = float(obj.quantity * obj.current_price)
+        return round(((current - invested) / invested) * 100, 2)
+
+    def get_is_market_tracked(self, obj):
+        """Whether this holding auto-updates from market data."""
+        if not obj.asset:
+            return False
+        return obj.asset.exchange != 'MANUAL'
+
+    def get_unit_price(self, obj):
+        """Current price per unit."""
+        return float(obj.current_price)
+
+    # ── Create ─────────────────────────────────────────────────────────
+
+    def to_internal_value(self, data):
+        """
+        Map the flat frontend field names (name, symbol, etc.)
+        to the internal source names (input_name, input_symbol, etc.)
+        so the serializer recognizes them.
+        """
+        mapped = {}
+        # Map frontend keys -> serializer write-only field keys
+        field_map = {
+            'name': 'input_name',
+            'symbol': 'input_symbol',
+            'investment_type': 'input_investment_type',
+            'amount': 'input_amount',
+            'current_value': 'input_current_value',
+            'quantity': 'input_quantity',
+            'buy_price': 'input_buy_price',
+            'purchase_date': 'input_purchase_date',
+            'description': 'input_description',
+            'monthly_income': 'input_monthly_income',
+        }
+        for key, value in data.items():
+            mapped_key = field_map.get(key, key)
+            mapped[mapped_key] = value
+        return super().to_internal_value(mapped)
+
+    def create(self, validated_data):
+        # Extract write-only fields
+        name = validated_data.pop('_name', 'Manual Asset')
+        symbol_input = validated_data.pop('_symbol', '').strip().upper()
+        inv_type = validated_data.pop('_investment_type', 'stocks')
+        amount = validated_data.pop('_amount', None)
+        current_value = validated_data.pop('_current_value', None)
+        quantity_input = validated_data.pop('_quantity', None)
+        buy_price_input = validated_data.pop('_buy_price', None)
+        purchase_date_str = validated_data.pop('_purchase_date', None)
+        description = validated_data.pop('_description', '')
+        monthly_income = validated_data.pop('_monthly_income', Decimal('0'))
+
+        # Auto-append -USD for crypto if missing
+        if inv_type == 'crypto' and symbol_input and not symbol_input.endswith('-USD'):
+            symbol_input = f"{symbol_input}-USD"
+
+        # ── Determine tracking mode ────────────────────────────────────
+        # Market-tracked types: stocks, crypto, etf (and mutual_funds/bonds/gold WITH a ticker)
+        MARKET_TYPES = {'stocks', 'crypto', 'etf', 'nft'}
+        HYBRID_TYPES = {'mutual_funds', 'bonds', 'gold'}  # Can be tracked OR manual
+        MANUAL_TYPES = {'real_estate', 'other'}
+
+        is_market_tracked = False
+        if inv_type in MARKET_TYPES and symbol_input:
+            is_market_tracked = True
+        elif inv_type in HYBRID_TYPES and symbol_input:
+            # Has a valid ticker = market tracked
+            is_market_tracked = True
+        # Manual types or no symbol = manual
+
+        # ── Map frontend investment_type to backend asset_type ─────────
+        type_map = {
+            'stocks': 'stock',
+            'crypto': 'crypto',
+            'real_estate': 'real_estate',
+            'bonds': 'bond',
+            'mutual_funds': 'mutual_fund',
+            'etf': 'etf',
+            'gold': 'commodity',
+            'nft': 'nft',
+            'other': 'commodity',
+        }
+        asset_type = type_map.get(inv_type, 'stock')
+
+        # ── Compute quantity and buy price ─────────────────────────────
+        if is_market_tracked and quantity_input and buy_price_input:
+            # User provided quantity + per-unit buy price
+            quantity = Decimal(str(quantity_input))
+            avg_buy_price = Decimal(str(buy_price_input))
+        elif amount is not None:
+            # Manual mode: store as 1 unit at total amount
+            quantity = Decimal('1')
+            avg_buy_price = Decimal(str(amount))
+        else:
+            quantity = Decimal('1')
+            avg_buy_price = Decimal('0')
+
+        # ── Compute current price ──────────────────────────────────────
+        if is_market_tracked and symbol_input:
+            # Try to fetch the LIVE price for the current value
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(symbol_input)
+                info = ticker.fast_info
+                live_price = getattr(info, 'last_price', None)
+                if live_price:
+                    current_price = Decimal(str(round(live_price, 8)))
+                else:
+                    current_price = avg_buy_price
+            except Exception:
+                current_price = avg_buy_price
+        elif current_value is not None:
+            current_price = Decimal(str(current_value))
+        else:
+            current_price = avg_buy_price
+
+        # ── Generate unique symbol for manual entries ──────────────────
+        type_prefix_map = {
+            'mutual_funds': 'MF',
+            'real_estate': 'RE',
+            'bonds': 'BD',
+            'other': 'OT',
+            'nft': 'NFT',
+        }
+        if not symbol_input:
+            prefix = type_prefix_map.get(inv_type, 'MAN')
+            symbol_input = f"{prefix}-{str(uuid_lib.uuid4())[:8].upper()}"
+
+        # ── Determine exchange ─────────────────────────────────────────
+        manual_prefixes = ('MAN-', 'MF-', 'RE-', 'BD-', 'OT-', 'NFT-')
+        exchange = 'MANUAL' if symbol_input.startswith(manual_prefixes) else 'AUTO'
+
+        # ── Find or create asset ───────────────────────────────────────
+        asset, created = Asset.objects.get_or_create(
+            symbol=symbol_input,
+            defaults={
+                'name': name,
+                'asset_type': asset_type,
+                'exchange': exchange,
+            }
+        )
+        # If asset already existed but was created for a different user,
+        # update the name if it was just a generic name
+        if not created and asset.name == 'Manual Asset' and name != 'Manual Asset':
+            asset.name = name
+            asset.save(update_fields=['name'])
+
+        # ── Parse purchase_date ────────────────────────────────────────
+        parsed_date = None
+        if purchase_date_str:
+            try:
+                from datetime import date as dt_date
+                parts = purchase_date_str.split('-')
+                if len(parts) == 3:
+                    parsed_date = dt_date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except (ValueError, IndexError):
+                pass
+
+        # ── Compute unrealized P&L ─────────────────────────────────────
+        unrealized_pnl = float(quantity * current_price) - float(quantity * avg_buy_price)
+
+        # ── Create or update the holding ───────────────────────────────
+        try:
+            holding = Holding.objects.create(
+                user=self.context['request'].user,
+                asset=asset,
+                quantity=quantity,
+                avg_buy_price=avg_buy_price,
+                current_price=current_price,
+                unrealized_pnl=unrealized_pnl,
+                notes=description or None,
+                monthly_income=monthly_income or 0,
+                purchase_date=parsed_date,
+            )
+        except IntegrityError:
+            # User already has this asset — update existing holding instead
+            holding = Holding.objects.get(
+                user=self.context['request'].user,
+                asset=asset,
+            )
+            # Add to existing position
+            old_total_cost = holding.avg_buy_price * holding.quantity
+            holding.quantity += quantity
+            new_total_cost = old_total_cost + (avg_buy_price * quantity)
+            holding.avg_buy_price = new_total_cost / holding.quantity if holding.quantity > 0 else avg_buy_price
+            holding.current_price = current_price
+            holding.unrealized_pnl = float(holding.quantity * holding.current_price) - float(holding.quantity * holding.avg_buy_price)
+            if description:
+                holding.notes = description
+            if monthly_income:
+                holding.monthly_income = monthly_income
+            if parsed_date:
+                holding.purchase_date = parsed_date
+            holding.save()
+
+        return holding
+
+
+class PriceHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PriceHistory
         fields = '__all__'
-        read_only_fields = ('user', 'created_at', 'updated_at', 'return_amount', 'return_percentage')
