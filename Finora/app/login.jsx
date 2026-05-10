@@ -32,7 +32,7 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (error) {
       if (!error.response) {
-        Alert.alert('Network Error', 'Cannot connect to the server. Please make sure your backend is running on 0.0.0.0:8000.');
+        Alert.alert('Network Error', 'Could not reach the server. Please check your internet connection and try again.');
       } else {
         const msg = error.response.data?.detail || 'Invalid credentials. Please check your email and password.';
         Alert.alert('Login Failed', msg);
@@ -109,7 +109,10 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={{alignSelf: 'flex-end',marginBottom: 24}}>
+            <TouchableOpacity 
+              style={{alignSelf: 'flex-end',marginBottom: 24}}
+              onPress={() => Alert.alert('Coming Soon', 'Password reset functionality will be available in a future update.')}
+            >
               <Text style={{color: '#2563EB',fontWeight: '600',fontSize: 14}}>Forgot password?</Text>
             </TouchableOpacity>
 

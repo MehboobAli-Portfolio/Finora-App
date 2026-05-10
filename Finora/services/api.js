@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
@@ -15,10 +15,11 @@ const getBaseUrl = () => {
     return `http://${hostUri.split(':')[0]}:8000/api/`;
   }
   
-  // Fallback
+  // Fallback for Android Emulator
   if (Platform.OS === 'android') return 'http://10.0.2.2:8000/api/';
   
-  return 'http://192.168.18.15:8000/api/';
+  // Default fallback (could be changed to production URL later)
+  return 'http://localhost:8000/api/';
 };
 
 const BASE_URL = getBaseUrl();
@@ -34,7 +35,7 @@ const api = axios.create({
 // Request interceptor to add JWT token
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('access_token');
+    const token = await SecureStore.getItemAsync('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -53,16 +54,21 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        const refreshToken = await SecureStore.getItemAsync('refresh_token');
         const response = await axios.post(`${BASE_URL}auth/refresh/`, {
           refresh: refreshToken,
         });
         const { access } = response.data;
-        await AsyncStorage.setItem('access_token', access);
+        await SecureStore.setItemAsync('access_token', access);
         originalRequest.headers.Authorization = `Bearer ${access}`;
         return api(originalRequest);
       } catch (refreshError) {
-        await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user_data']);
+        await SecureStore.deleteItemAsync('access_token');
+        await SecureStore.deleteItemAsync('refresh_token');
+        // user_data can stay in AsyncStorage as it's not sensitive, but for consistency we can move it or leave it.
+        // AsyncStorage.removeItem('user_data') is still needed if we don't move it.
+        // Let's keep user_data in SecureStore for consistency.
+        await SecureStore.deleteItemAsync('user_data');
         return Promise.reject(refreshError);
       }
     }

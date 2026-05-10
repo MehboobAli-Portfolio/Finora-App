@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
@@ -14,10 +14,12 @@ export function AuthProvider({ children }) {
 
   const checkAuthState = async () => {
     try {
-      const userData = await AsyncStorage.getItem('user_data');
-      const token = await AsyncStorage.getItem('access_token');
+      const userData = await SecureStore.getItemAsync('user_data');
+      const token = await SecureStore.getItemAsync('access_token');
       if (userData && token) {
         setUser(JSON.parse(userData));
+        // Verify token by refreshing profile in the background
+        refreshUser();
       }
     } catch (error) {
       console.error('Auth state error:', error);
@@ -29,11 +31,11 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const response = await authAPI.login({ email, password });
     const { access, refresh } = response.data;
-    await AsyncStorage.setItem('access_token', access);
-    await AsyncStorage.setItem('refresh_token', refresh);
+    await SecureStore.setItemAsync('access_token', access);
+    await SecureStore.setItemAsync('refresh_token', refresh);
     // Get profile
     const profileRes = await authAPI.getProfile();
-    await AsyncStorage.setItem('user_data', JSON.stringify(profileRes.data));
+    await SecureStore.setItemAsync('user_data', JSON.stringify(profileRes.data));
     setUser(profileRes.data);
     return profileRes.data;
   };
@@ -41,22 +43,24 @@ export function AuthProvider({ children }) {
   const register = async (email, username, fullName, password, password2) => {
     const response = await authAPI.register({ email, username, full_name: fullName, password, password2 });
     const { tokens, user: userData } = response.data;
-    await AsyncStorage.setItem('access_token', tokens.access);
-    await AsyncStorage.setItem('refresh_token', tokens.refresh);
-    await AsyncStorage.setItem('user_data', JSON.stringify(userData));
+    await SecureStore.setItemAsync('access_token', tokens.access);
+    await SecureStore.setItemAsync('refresh_token', tokens.refresh);
+    await SecureStore.setItemAsync('user_data', JSON.stringify(userData));
     setUser(userData);
     return userData;
   };
 
   const logout = async () => {
-    await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user_data']);
+    await SecureStore.deleteItemAsync('access_token');
+    await SecureStore.deleteItemAsync('refresh_token');
+    await SecureStore.deleteItemAsync('user_data');
     setUser(null);
   };
 
   const refreshUser = async () => {
     try {
       const res = await authAPI.getProfile();
-      await AsyncStorage.setItem('user_data', JSON.stringify(res.data));
+      await SecureStore.setItemAsync('user_data', JSON.stringify(res.data));
       setUser(res.data);
     } catch (e) {
       console.error('Refresh user failed:', e);

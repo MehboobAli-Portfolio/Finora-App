@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { expensesAPI } from '../services/api';
 
 const CATEGORIES = [{
@@ -76,6 +77,7 @@ export default function AddExpenseScreen() {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const handleScanReceipt = async () => {
     try {
@@ -114,22 +116,38 @@ export default function AddExpenseScreen() {
     }
   };
 
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setDate(selectedDate.toISOString().split('T')[0]);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!title || !amount) {
       Alert.alert('Error', 'Please fill in title and amount');
       return;
     }
+    
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid positive number for the amount.');
+      return;
+    }
+    
     setLoading(true);
 
     try {
       await expensesAPI.create({
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category: category,
         txn_type: type,
         date,
         description: `${title}${description ? ' - ' + description : ''}`
       });
-      router.back();
+      Alert.alert('Success', 'Transaction added successfully!', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
     } catch (e) {
       const errMsg = e?.response?.data?.category?.[0] || e?.response?.data?.detail || 'Failed to add transaction';
       Alert.alert('Error', errMsg);
@@ -152,9 +170,13 @@ export default function AddExpenseScreen() {
           </TouchableOpacity>
         </View>
 
-        <KeyboardAwareScrollView enableOnAndroid={true} extraScrollHeight={20} showsVerticalScrollIndicator={false} contentContainerStyle={{
-        padding: 20
-      }}>
+        <KeyboardAwareScrollView 
+          enableOnAndroid={true} 
+          extraScrollHeight={200} 
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+        >
           {/* Type Toggle */}
           <View style={{flexDirection: 'row',backgroundColor: '#F3F4F6',borderRadius: 14,padding: 4,marginBottom: 24}}>
             <TouchableOpacity
@@ -201,13 +223,22 @@ export default function AddExpenseScreen() {
           {/* Date */}
           <View style={{marginBottom: 18}}>
             <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Date</Text>
-            <TextInput
-              style={{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,fontSize: 15,color: '#111827'}}
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#9CA3AF"
-            />
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(true)}
+              style={{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,flexDirection: 'row',alignItems: 'center',justifyContent: 'space-between'}}
+            >
+              <Text style={{fontSize: 15,color: '#111827'}}>{date}</Text>
+              <Ionicons name="calendar-outline" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+            
+            {showDatePicker && (
+              <DateTimePicker
+                value={new Date(date)}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+              />
+            )}
           </View>
 
           {/* Category */}
@@ -245,7 +276,7 @@ export default function AddExpenseScreen() {
           <TouchableOpacity
             style={[{borderRadius: 16,height: 56,flexDirection: 'row',alignItems: 'center',justifyContent: 'center',gap: 10,marginTop: 8,marginBottom: 20,shadowOffset: {width: 0,height: 4},shadowOpacity: 0.25,shadowRadius: 8,elevation: 6}, { backgroundColor: type === 'expense' ? '#EF4444' : '#10B981' }]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={loading || scanning}
           >
             {loading ? <ActivityIndicator color="#FFF" /> : (
               <>

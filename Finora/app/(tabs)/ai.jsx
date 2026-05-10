@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
-  Keyboard, Animated
+  Platform, ActivityIndicator, Keyboard
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,28 +21,22 @@ export default function AiScreen() {
   const [conversationId, setConversationId] = useState(null);
   const scrollViewRef = useRef();
 
-  // Animated spacer for smooth tab bar avoidance
-  const spacerHeight = useRef(new Animated.Value(90)).current;
+  // Dynamic keyboard handling
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, () => {
-      Animated.timing(spacerHeight, {
-        toValue: 0,
-        duration: Platform.OS === 'ios' ? 250 : 100,
-        useNativeDriver: false,
-      }).start();
-    });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      Animated.timing(spacerHeight, {
-        toValue: 90,
-        duration: Platform.OS === 'ios' ? 250 : 100,
-        useNativeDriver: false,
-      }).start();
-    });
-    return () => { showSub.remove(); hideSub.remove(); };
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   const handleSend = async () => {
@@ -63,22 +56,22 @@ export default function AiScreen() {
     try {
       const response = await aiAPI.chat(text, conversationId);
       const data = response.data;
-      
+
       if (data.conversation_id && !conversationId) {
         setConversationId(data.conversation_id);
       }
-      
-      setMessages(prev => [...prev, { 
-        id: (Date.now() + 1).toString(), 
-        text: data.reply, 
+
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        text: data.reply,
         role: 'bot',
-        intent: data.intent 
+        intent: data.intent
       }]);
     } catch (e) {
-      setMessages(prev => [...prev, { 
-        id: (Date.now() + 2).toString(), 
-        text: "I'm having a connection issue. Please try again.", 
-        role: 'bot' 
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 2).toString(),
+        text: "I'm having a connection issue. Please try again.",
+        role: 'bot'
       }]);
     } finally { setLoading(false); }
   };
@@ -86,9 +79,9 @@ export default function AiScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       {/* HEADER */}
-      <View style={{ 
-        paddingTop: insets.top + 10, 
-        paddingBottom: 20, 
+      <View style={{
+        paddingTop: insets.top + 10,
+        paddingBottom: 20,
         backgroundColor: '#2563EB',
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
@@ -97,20 +90,20 @@ export default function AiScreen() {
         <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFFFFF' }}>Neural Coach</Text>
       </View>
 
-      {/* MAIN CONTAINER */}
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
+      <View style={{ 
+        flex: 1, 
+        marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0 
+      }}>
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 20, paddingBottom: 10 }}
+          contentContainerStyle={{ 
+            padding: 20, 
+            paddingBottom: insets.bottom + 100 
+          }}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
         >
           {messages.map((msg) => (
             <View key={msg.id} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginBottom: 16 }}>
@@ -130,10 +123,11 @@ export default function AiScreen() {
         </ScrollView>
 
         {/* INPUT BAR */}
-        <View style={{ 
+        <View style={{
           backgroundColor: '#FFFFFF',
           paddingHorizontal: 16,
           paddingVertical: 12,
+          paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 85,
           borderTopWidth: 1,
           borderTopColor: '#E2E8F0',
         }}>
@@ -147,15 +141,16 @@ export default function AiScreen() {
               onSubmitEditing={handleSend}
               returnKeyType="send"
             />
-            <TouchableOpacity onPress={handleSend} disabled={loading || !inputText.trim()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: inputText.trim() ? '#2563EB' : '#E2E8F0', justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity 
+              onPress={handleSend} 
+              disabled={loading || !inputText.trim()} 
+              style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: inputText.trim() ? '#2563EB' : '#E2E8F0', justifyContent: 'center', alignItems: 'center' }}
+            >
               <Ionicons name="send" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* ANIMATED SPACER — smoothly transitions for tab bar */}
-        <Animated.View style={{ height: spacerHeight, backgroundColor: '#FFFFFF' }} />
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }

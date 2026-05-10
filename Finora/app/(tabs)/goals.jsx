@@ -215,7 +215,11 @@ function GoalCard({
   const progress = goal.progress_percentage || goal.progress_pct || 0;
 
   return (
-    <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 16,marginBottom: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 4}}>
+    <TouchableOpacity 
+      activeOpacity={0.8}
+      onPress={onEdit}
+      style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 16,marginBottom: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 4}}
+    >
       <View style={{flexDirection: 'row',alignItems: 'center',marginBottom: 14,gap: 12}}>
         <View style={[{width: 48,height: 48,borderRadius: 14,justifyContent: 'center',alignItems: 'center'}, { backgroundColor: `${color}18` }]}>
           <Ionicons name={icon} size={24} color={color} />
@@ -231,9 +235,6 @@ function GoalCard({
           </View>
         )}
         <View style={{ flexDirection: 'row', gap: 6 }}>
-          <TouchableOpacity onPress={onEdit} style={{ padding: 4 }}>
-            <Ionicons name="pencil-outline" size={18} color="#2563EB" />
-          </TouchableOpacity>
           <TouchableOpacity onPress={onDelete} style={{ padding: 4 }}>
             <Ionicons name="trash-outline" size={18} color="#EF4444" />
           </TouchableOpacity>
@@ -256,6 +257,6 @@ function GoalCard({
           <Text style={{fontSize: 12,color: '#6B7280',marginTop: 8}}>🎯 Target: {goal.deadline}</Text>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
