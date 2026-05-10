@@ -218,7 +218,11 @@ function ExpenseCard({
   const icon = CATEGORY_ICONS[exp.category] || 'ellipsis-horizontal';
   const color = CATEGORY_COLORS[exp.category] || '#9CA3AF';
   return (
-    <View style={{flexDirection: 'row',alignItems: 'center',backgroundColor: '#FFFFFF',borderRadius: 14,padding: 14,marginBottom: 10,gap: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 1},shadowOpacity: 0.04,shadowRadius: 4,elevation: 2}}>
+    <TouchableOpacity 
+      activeOpacity={0.7}
+      onPress={onEdit}
+      style={{flexDirection: 'row',alignItems: 'center',backgroundColor: '#FFFFFF',borderRadius: 14,padding: 14,marginBottom: 10,gap: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 1},shadowOpacity: 0.04,shadowRadius: 4,elevation: 2}}
+    >
       <View style={[{width: 44,height: 44,borderRadius: 12,justifyContent: 'center',alignItems: 'center'}, { backgroundColor: `${color}18` }]}>
         <Ionicons name={icon} size={20} color={color} />
       </View>
@@ -231,15 +235,12 @@ function ExpenseCard({
           {isIncome ? '+' : '-'}{fmt(exp.amount)}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={onEdit} style={{padding: 4}}>
-            <Ionicons name="pencil-outline" size={16} color="#2563EB" />
-          </TouchableOpacity>
           <TouchableOpacity onPress={onDelete} style={{padding: 4}}>
             <Ionicons name="trash-outline" size={16} color="#EF4444" />
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

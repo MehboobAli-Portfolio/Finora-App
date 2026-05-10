@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -193,6 +193,27 @@ export default function InvestmentDetailScreen() {
             <Text style={{ fontSize: 14, color: '#4B5563', lineHeight: 22 }}>{holding.description}</Text>
           </View>
         )}
+
+        {/* Quick Actions */}
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 24, marginBottom: 40 }}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { flex: 1, backgroundColor: theme.colors.primary }]}
+            onPress={() => router.push({ pathname: '/edit-investment', params: { id } })}
+          >
+            <Ionicons name="create-outline" size={20} color="#FFF" />
+            <Text style={styles.actionButtonText}>Edit Details</Text>
+          </TouchableOpacity>
+          
+          {holding.is_market_tracked && (
+            <TouchableOpacity 
+              style={[styles.actionButton, { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: theme.colors.primary }]}
+              onPress={() => Alert.alert('Add Units', 'To add more units, please use the Edit screen to update your total quantity and adjust your average buy price. Advanced DCA calculator coming soon!')}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={theme.colors.primary} />
+              <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Add Units</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -215,4 +236,6 @@ const styles = StyleSheet.create({
   gridItem: { width: '50%', paddingHorizontal: 8, marginBottom: 16 },
   gridLabel: { fontSize: 12, color: '#6B7280', fontWeight: '600', marginBottom: 4 },
   gridValue: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 12 },
+  actionButtonText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 });

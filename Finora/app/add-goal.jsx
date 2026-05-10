@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalsAPI } from '../services/api';
 
 const GOAL_TYPES = [{
@@ -64,6 +65,7 @@ export default function AddGoalScreen() {
   const [targetDate, setTargetDate] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const handleSubmit = async () => {
     if (!title || !targetAmount) {
@@ -89,6 +91,13 @@ export default function AddGoalScreen() {
     }
   };
 
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setTargetDate(selectedDate.toISOString().split('T')[0]);
+    }
+  };
+
   const selectedType = GOAL_TYPES.find(t => t.id === goalType);
 
   return (
@@ -102,9 +111,13 @@ export default function AddGoalScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <KeyboardAwareScrollView enableOnAndroid={true} extraScrollHeight={20} showsVerticalScrollIndicator={false} contentContainerStyle={{
-        padding: 20
-      }}>
+        <KeyboardAwareScrollView 
+          enableOnAndroid={true} 
+          extraScrollHeight={200} 
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+        >
           {/* Target amount */}
           <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 20,marginBottom: 20,alignItems: 'center',shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 3}}>
             <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '700',textTransform: 'uppercase',letterSpacing: 0.5,marginBottom: 8}}>Target Amount</Text>
@@ -168,13 +181,22 @@ export default function AddGoalScreen() {
           {/* Target Date */}
           <View style={{marginBottom: 18}}>
             <Text style={{fontSize: 12,fontWeight: '700',color: '#374151',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Target Date (optional)</Text>
-            <TextInput
-              style={{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,fontSize: 15,color: '#111827'}}
-              value={targetDate}
-              onChangeText={setTargetDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#9CA3AF"
-            />
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(true)}
+              style={{backgroundColor: '#FFFFFF',borderRadius: 12,borderWidth: 1.5,borderColor: '#E5E7EB',paddingHorizontal: 16,height: 50,flexDirection: 'row',alignItems: 'center',justifyContent: 'space-between'}}
+            >
+              <Text style={{fontSize: 15, color: '#111827'}}>{targetDate || 'Select Date'}</Text>
+              <Ionicons name="calendar-outline" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+            
+            {showDatePicker && (
+              <DateTimePicker
+                value={targetDate ? new Date(targetDate) : new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+              />
+            )}
           </View>
 
           {/* Description */}
