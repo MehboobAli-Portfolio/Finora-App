@@ -7,6 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { expensesAPI } from '../../services/api';
+import { useQuery } from '@tanstack/react-query';
+import { CartesianChart, Bar } from 'victory-native';
+import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
 
 const CATEGORY_ICONS = {
   food: 'fast-food',
@@ -70,8 +73,17 @@ export default function ExpensesScreen() {
     }
   };
 
+  const { data: analytics, refetch: refetchAnalytics } = useQuery({
+    queryKey: ['expenses-analytics'],
+    queryFn: async () => {
+      const res = await expensesAPI.getAnalytics();
+      return res.data;
+    }
+  });
+
   useFocusEffect(useCallback(() => {
     loadExpenses();
+    refetchAnalytics();
   }, [activeFilter]));
 
   const handleDelete = id => {
@@ -156,9 +168,73 @@ export default function ExpensesScreen() {
       ) : (
         <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 20 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadExpenses(); }} tintColor="#2563EB" />}
+          contentContainerStyle={{ padding: 20, paddingBottom: 160 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadExpenses(); refetchAnalytics(); }} tintColor="#2563EB" />}
         >
+          {/* Daily Spending Heatmap Chart */}
+          {analytics?.daily_spending && analytics.daily_spending.length > 0 && activeFilter !== 'income' && (
+            <View style={{ marginBottom: 24, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Daily Spending (60 Days)</Text>
+              <View style={{ height: 160 }}>
+                <CartesianChart 
+                  data={analytics.daily_spending.map((d, i) => ({ x: i, y: d.total, date: d.date }))} 
+                  xKey="x" 
+                  yKeys={["y"]}
+                  domainPadding={{ left: 10, right: 10, top: 20 }}
+                >
+                  {({ points, chartBounds }) => (
+                    <Bar
+                      points={points.y}
+                      chartBounds={chartBounds}
+                      color="#EF4444"
+                      roundedCorners={{ topLeft: 4, topRight: 4 }}
+                      barWidth={4}
+                      animate={{ type: "spring" }}
+                    >
+                      <SkiaGradient
+                        start={vec(0, 0)}
+                        end={vec(0, chartBounds.bottom)}
+                        colors={["#EF4444", "#EF444460"]}
+                      />
+                    </Bar>
+                  )}
+                </CartesianChart>
+              </View>
+            </View>
+          )}
+
+          {/* Daily Income Heatmap Chart */}
+          {analytics?.daily_income && analytics.daily_income.length > 0 && activeFilter !== 'expense' && (
+            <View style={{ marginBottom: 24, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Daily Income (60 Days)</Text>
+              <View style={{ height: 160 }}>
+                <CartesianChart 
+                  data={analytics.daily_income.map((d, i) => ({ x: i, y: d.total, date: d.date }))} 
+                  xKey="x" 
+                  yKeys={["y"]}
+                  domainPadding={{ left: 10, right: 10, top: 20 }}
+                >
+                  {({ points, chartBounds }) => (
+                    <Bar
+                      points={points.y}
+                      chartBounds={chartBounds}
+                      color="#10B981"
+                      roundedCorners={{ topLeft: 4, topRight: 4 }}
+                      barWidth={4}
+                      animate={{ type: "spring" }}
+                    >
+                      <SkiaGradient
+                        start={vec(0, 0)}
+                        end={vec(0, chartBounds.bottom)}
+                        colors={["#10B981", "#10B98160"]}
+                      />
+                    </Bar>
+                  )}
+                </CartesianChart>
+              </View>
+            </View>
+          )}
+
           {expenses.length === 0 ? (
             <View style={{alignItems: 'center',paddingVertical: 60}}>
               <Ionicons name="receipt-outline" size={48} color="#D1D5DB" />

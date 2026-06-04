@@ -10,12 +10,16 @@ import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { theme } from '../../theme';
+import { Pie, PolarChart, CartesianChart, Bar, Line } from 'victory-native';
+import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
 
 const formatCurrency = amount => {
-  return `$${parseFloat(amount || 0).toLocaleString('en-US', {
+  const num = parseFloat(amount || 0);
+  const formatted = Math.abs(num).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  })}`;
+  });
+  return num < 0 ? `-$${formatted}` : `$${formatted}`;
 };
 
 const CATEGORY_ICONS = {
@@ -243,23 +247,188 @@ export default function HomeScreen() {
 
         {/* Analytics Charts */}
         <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Income vs Expenses</Text>
-          <View style={{ flexDirection: 'row', height: 160, alignItems: 'flex-end', justifyContent: 'space-around' }}>
-            {/* Income Bar */}
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, fontWeight: '600' }}>{formatCurrency(dashboard?.total_income)}</Text>
-              <View style={{ width: 48, height: Math.max(8, ((dashboard?.total_income || 0) / Math.max(dashboard?.total_income || 1, dashboard?.total_expenses || 1)) * 100), backgroundColor: '#10B981', borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />
-              <Text style={{ fontSize: 13, color: '#374151', marginTop: 8, fontWeight: '600' }}>Income</Text>
+          {(() => {
+            const monthlyIncome = parseFloat(dashboard?.total_income || 0);
+            const monthlyExpenses = parseFloat(dashboard?.total_expenses || 0);
+            const alltimeIncome = parseFloat(dashboard?.alltime_income || 0);
+            const alltimeExpenses = parseFloat(dashboard?.alltime_expenses || 0);
+
+            // Use monthly data if available, otherwise fall back to all-time
+            const hasMonthly = monthlyIncome > 0 || monthlyExpenses > 0;
+            const income = hasMonthly ? monthlyIncome : alltimeIncome;
+            const expenses = hasMonthly ? monthlyExpenses : alltimeExpenses;
+            const periodLabel = hasMonthly ? 'This Month' : 'All Time';
+            const maxVal = Math.max(income, expenses);
+            const maxBarHeight = 120;
+
+            return (
+              <>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>Income vs Expenses</Text>
+                  <View style={{ backgroundColor: hasMonthly ? '#EFF6FF' : '#F3F4F6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: hasMonthly ? '#2563EB' : '#6B7280' }}>{periodLabel}</Text>
+                  </View>
+                </View>
+
+                {maxVal === 0 ? (
+                  <View style={{ height: 160, justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="bar-chart-outline" size={36} color="#D1D5DB" />
+                    <Text style={{ fontSize: 13, color: '#9CA3AF', marginTop: 8 }}>No transactions yet</Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', height: 180, alignItems: 'flex-end', justifyContent: 'space-evenly', paddingHorizontal: 20 }}>
+                    {/* Income Bar */}
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: '#10B981', marginBottom: 8, fontWeight: '700' }}>{formatCurrency(income)}</Text>
+                      <View style={{ width: 56, height: Math.max(12, (income / maxVal) * maxBarHeight), backgroundColor: '#D1FAE5', borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end' }}>
+                        <View style={{ width: '100%', height: '100%', backgroundColor: '#10B981', borderTopLeftRadius: 10, borderTopRightRadius: 10, opacity: 0.85 }} />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                        <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600' }}>Income</Text>
+                      </View>
+                    </View>
+
+                    {/* Expense Bar */}
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8, fontWeight: '700' }}>{formatCurrency(expenses)}</Text>
+                      <View style={{ width: 56, height: Math.max(12, (expenses / maxVal) * maxBarHeight), backgroundColor: '#FEE2E2', borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end' }}>
+                        <View style={{ width: '100%', height: '100%', backgroundColor: '#EF4444', borderTopLeftRadius: 10, borderTopRightRadius: 10, opacity: 0.85 }} />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                        <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600' }}>Expenses</Text>
+                      </View>
+                    </View>
+
+                    {/* Savings Bar */}
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: income - expenses >= 0 ? '#2563EB' : '#F59E0B', marginBottom: 8, fontWeight: '700' }}>
+                        {formatCurrency(Math.abs(income - expenses))}
+                      </Text>
+                      <View style={{
+                        width: 56,
+                        height: Math.max(12, (Math.abs(income - expenses) / maxVal) * maxBarHeight),
+                        backgroundColor: income - expenses >= 0 ? '#DBEAFE' : '#FEF3C7',
+                        borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end'
+                      }}>
+                        <View style={{
+                          width: '100%', height: '100%',
+                          backgroundColor: income - expenses >= 0 ? '#2563EB' : '#F59E0B',
+                          borderTopLeftRadius: 10, borderTopRightRadius: 10, opacity: 0.85
+                        }} />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: income - expenses >= 0 ? '#2563EB' : '#F59E0B' }} />
+                        <Text style={{ fontSize: 13, color: '#374151', fontWeight: '600' }}>
+                          {income - expenses >= 0 ? 'Saved' : 'Over'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </>
+            );
+          })()}
+        </View>
+
+        {/* Spending by Category Chart */}
+        {dashboard?.spending_by_category?.length > 0 && (
+          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Spending by Category</Text>
+            <View style={{ height: 200 }}>
+              <PolarChart
+                data={dashboard.spending_by_category.map(c => ({...c, color: CATEGORY_COLORS[c.label] || CATEGORY_COLORS.other}))}
+                colorKey="color"
+                labelKey="label"
+                valueKey="value"
+              >
+                <Pie.Chart innerRadius={60}>
+                  {({ slice }) => <Pie.Slice />}
+                </Pie.Chart>
+              </PolarChart>
+              {/* Center total text */}
+              <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Total</Text>
+                <Text style={{ fontSize: 16, color: '#111827', fontWeight: '800' }}>
+                  {formatCurrency(dashboard.spending_by_category.reduce((sum, item) => sum + item.value, 0))}
+                </Text>
+              </View>
             </View>
-            
-            {/* Expense Bar */}
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8, fontWeight: '600' }}>{formatCurrency(dashboard?.total_expenses)}</Text>
-              <View style={{ width: 48, height: Math.max(8, ((dashboard?.total_expenses || 0) / Math.max(dashboard?.total_income || 1, dashboard?.total_expenses || 1)) * 100), backgroundColor: '#EF4444', borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />
-              <Text style={{ fontSize: 13, color: '#374151', marginTop: 8, fontWeight: '600' }}>Expenses</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, justifyContent: 'center', gap: 12 }}>
+              {dashboard.spending_by_category.map((cat, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: CATEGORY_COLORS[cat.label] || CATEGORY_COLORS.other }} />
+                  <Text style={{ fontSize: 12, color: '#4B5563', textTransform: 'capitalize' }}>{cat.label}</Text>
+                </View>
+              ))}
             </View>
           </View>
-        </View>
+        )}
+
+        {/* Income by Category Chart */}
+        {dashboard?.income_by_category?.length > 0 && (
+          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Income by Category</Text>
+            <View style={{ height: 200 }}>
+              <PolarChart
+                data={dashboard.income_by_category.map(c => ({...c, color: CATEGORY_COLORS[c.label] || CATEGORY_COLORS.other}))}
+                colorKey="color"
+                labelKey="label"
+                valueKey="value"
+              >
+                <Pie.Chart innerRadius={60}>
+                  {({ slice }) => <Pie.Slice />}
+                </Pie.Chart>
+              </PolarChart>
+              {/* Center total text */}
+              <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Total</Text>
+                <Text style={{ fontSize: 16, color: '#111827', fontWeight: '800' }}>
+                  {formatCurrency(dashboard.income_by_category.reduce((sum, item) => sum + item.value, 0))}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, justifyContent: 'center', gap: 12 }}>
+              {dashboard.income_by_category.map((cat, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: CATEGORY_COLORS[cat.label] || CATEGORY_COLORS.other }} />
+                  <Text style={{ fontSize: 12, color: '#4B5563', textTransform: 'capitalize' }}>{cat.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Weekly Spending Trend Chart */}
+        {dashboard?.weekly_spending?.length > 0 && (
+          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Weekly Spending Trend</Text>
+            <View style={{ height: 180 }}>
+              <CartesianChart 
+                data={dashboard.weekly_spending.map((w, i) => ({ x: i, y: w.total, date: w.date }))} 
+                xKey="x" 
+                yKeys={["y"]}
+                domainPadding={{ left: 20, right: 20, top: 20 }}
+              >
+                {({ points, chartBounds }) => (
+                  <Line
+                    points={points.y}
+                    color="#8B5CF6"
+                    strokeWidth={3}
+                    animate={{ type: "spring" }}
+                  >
+                    <SkiaGradient
+                      start={vec(0, 0)}
+                      end={vec(0, chartBounds.bottom)}
+                      colors={["#8B5CF640", "transparent"]}
+                    />
+                  </Line>
+                )}
+              </CartesianChart>
+            </View>
+          </View>
+        )}
 
         {/* Recent Transactions */}
         <View style={{ marginHorizontal: 20, marginBottom: 16 }}>

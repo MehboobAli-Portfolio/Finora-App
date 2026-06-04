@@ -8,20 +8,33 @@ import { Ionicons } from '@expo/vector-icons';
 import { investmentsAPI } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { theme } from '../../theme';
+import { Pie, PolarChart, CartesianChart, Bar } from 'victory-native';
+import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
 
 const TYPE_META = {
-  stocks:       { icon: 'stats-chart',    color: '#2563EB',  label: 'Stocks' },
-  crypto:       { icon: 'logo-bitcoin',   color: '#F59E0B',  label: 'Crypto' },
-  real_estate:  { icon: 'business',       color: '#10B981',  label: 'Real Estate' },
-  bonds:        { icon: 'document-text',  color: '#6366F1',  label: 'Bonds' },
-  mutual_funds: { icon: 'pie-chart',      color: '#8B5CF6',  label: 'Mutual Funds' },
-  etf:          { icon: 'bar-chart',      color: '#3B82F6',  label: 'ETFs' },
-  gold:         { icon: 'medal',          color: '#D97706',  label: 'Gold' },
-  nft:          { icon: 'diamond',        color: '#EC4899',  label: 'NFT' },
-  other:        { icon: 'cash',           color: '#9CA3AF',  label: 'Other' },
+  crypto: { label: 'Crypto', color: '#8B5CF6', icon: 'logo-bitcoin' },
+  stock: { label: 'Stocks', color: '#3B82F6', icon: 'trending-up' },
+  stocks: { label: 'Stocks', color: '#3B82F6', icon: 'trending-up' },
+  real_estate: { label: 'Real Estate', color: '#10B981', icon: 'home' },
+  etf: { label: 'ETF', color: '#F59E0B', icon: 'bar-chart' },
+  etfs: { label: 'ETF', color: '#F59E0B', icon: 'bar-chart' },
+  mutual_fund: { label: 'Mutual Fund', color: '#EC4899', icon: 'pie-chart' },
+  mutual_funds: { label: 'Mutual Fund', color: '#EC4899', icon: 'pie-chart' },
+  bond: { label: 'Bonds', color: '#06B6D4', icon: 'document-text' },
+  bonds: { label: 'Bonds', color: '#06B6D4', icon: 'document-text' },
+  commodity: { label: 'Commodities', color: '#F97316', icon: 'cube' },
+  commodities: { label: 'Commodities', color: '#F97316', icon: 'cube' },
+  gold: { label: 'Gold', color: '#F59E0B', icon: 'medal' },
+  forex: { label: 'Forex', color: '#14B8A6', icon: 'cash' },
+  nft: { label: 'NFT', color: '#D946EF', icon: 'color-palette' },
+  other: { label: 'Other', color: '#9CA3AF', icon: 'wallet' },
 };
 
-const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmt = a => {
+  const num = parseFloat(a || 0);
+  const formatted = Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return num < 0 ? `-$${formatted}` : `$${formatted}`;
+};
 
 export default function InvestScreen() {
   const insets = useSafeAreaInsets();
@@ -33,7 +46,18 @@ export default function InvestScreen() {
     queryFn: async () => { const res = await investmentsAPI.list(); return res.data; }
   });
 
-  useFocusEffect(useCallback(() => { refetch(); }, []));
+  const { data: analytics, refetch: refetchAnalytics } = useQuery({
+    queryKey: ['investments-analytics'],
+    queryFn: async () => {
+      const res = await investmentsAPI.getAnalytics();
+      return res.data;
+    }
+  });
+
+  useFocusEffect(useCallback(() => { 
+    refetch(); 
+    refetchAnalytics();
+  }, []));
 
   const deleteMutation = useMutation({
     mutationFn: (id) => investmentsAPI.delete(id),
@@ -130,15 +154,86 @@ export default function InvestScreen() {
         )}
       </View>
 
-      {isLoading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
-      ) : (
-        <KeyboardAwareScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 20, paddingBottom: 160 }}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-        >
-          {investments.length === 0 ? (
+      {/* Analytics Charts inside the scroll view */}
+      <KeyboardAwareScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 20, paddingBottom: 160 }}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => { refetch(); refetchAnalytics(); }} />}
+      >
+        {analytics?.allocation?.length > 0 && (
+          <View style={{ marginBottom: 20, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Portfolio Allocation</Text>
+            <View style={{ height: 200 }}>
+              <PolarChart
+                data={analytics.allocation.map(a => ({...a, color: (TYPE_META[a.label] || TYPE_META.other).color}))}
+                colorKey="color"
+                labelKey="label"
+                valueKey="value"
+              >
+                <Pie.Chart innerRadius={60}>
+                  {({ slice }) => {
+                    return <Pie.Slice />;
+                  }}
+                </Pie.Chart>
+              </PolarChart>
+              <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Assets</Text>
+                <Text style={{ fontSize: 16, color: '#111827', fontWeight: '800' }}>
+                  {investments.length}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, justifyContent: 'center', gap: 12 }}>
+              {analytics.allocation.map((alloc, idx) => {
+                const meta = TYPE_META[alloc.label] || TYPE_META.other;
+                return (
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.color }} />
+                    <Text style={{ fontSize: 12, color: '#4B5563' }}>{meta.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {analytics?.pnl?.length > 0 && (
+          <View style={{ marginBottom: 24, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>P&L Summary</Text>
+            {analytics.pnl.map((item, idx) => {
+              const maxAbs = Math.max(...analytics.pnl.map(p => Math.abs(p.pnl)));
+              const isPositive = item.pnl >= 0;
+              const barWidth = maxAbs > 0 ? (Math.abs(item.pnl) / maxAbs) * 100 : 0;
+              return (
+                <View key={idx} style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', flex: 1 }} numberOfLines={1}>{item.name}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: isPositive ? '#10B981' : '#EF4444' }}>
+                      {isPositive ? '+' : ''}{fmt(item.pnl)}
+                    </Text>
+                  </View>
+                  <View style={{ height: 8, backgroundColor: '#F3F4F6', borderRadius: 4, flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: '50%', alignItems: 'flex-end', paddingRight: 2 }}>
+                      {!isPositive && (
+                        <View style={{ width: `${barWidth}%`, height: '100%', backgroundColor: '#EF4444', borderTopLeftRadius: 4, borderBottomLeftRadius: 4 }} />
+                      )}
+                    </View>
+                    <View style={{ width: 2, height: 12, backgroundColor: '#D1D5DB' }} />
+                    <View style={{ width: '50%', paddingLeft: 2 }}>
+                      {isPositive && (
+                        <View style={{ width: `${barWidth}%`, height: '100%', backgroundColor: '#10B981', borderTopRightRadius: 4, borderBottomRightRadius: 4 }} />
+                      )}
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {isLoading ? (
+          <ActivityIndicator style={{ marginTop: 20 }} color={theme.colors.primary} />
+        ) : investments.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 60 }}>
               <Ionicons name="trending-up-outline" size={48} color="#D1D5DB" />
               <Text style={{ fontSize: 18, fontWeight: '700', color: '#374151', marginTop: 16, marginBottom: 8 }}>No investments</Text>
@@ -170,8 +265,7 @@ export default function InvestScreen() {
               })}
             </View>
           )}
-        </KeyboardAwareScrollView>
-      )}
+      </KeyboardAwareScrollView>
 
       {/* FAB */}
       <TouchableOpacity

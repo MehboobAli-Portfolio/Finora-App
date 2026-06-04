@@ -45,21 +45,66 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// ── Token refresh queue to prevent race conditions ──
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 // Response interceptor to handle token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    console.error(`[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.baseURL}${error.config?.url} -> ${error.response?.status}`);
     const originalRequest = error.config;
+
+    // Only log non-401 errors as errors; 401 is a normal token-expiry flow
+    if (error.response?.status !== 401) {
+      console.error(`[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.url} -> ${error.response?.status}`);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        }).catch((err) => Promise.reject(err));
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
+
       try {
         const refreshToken = await SecureStore.getItemAsync('refresh_token');
+        if (!refreshToken) {
+          throw new Error('No refresh token');
+        }
         const response = await axios.post(`${BASE_URL}auth/refresh/`, {
           refresh: refreshToken,
         });
         const { access } = response.data;
         await SecureStore.setItemAsync('access_token', access);
+
+        // Process queued requests with new token
+        processQueue(null, access);
+
+        originalRequest.headers.Authorization = `Bearer ${access}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        await SecureStore.deleteItemAsync('access_token');
+        await SecureStore.deleteItemAsync('refresh_token');
         originalRequest.headers.Authorization = `Bearer ${access}`;
         return api(originalRequest);
       } catch (refreshError) {
@@ -70,6 +115,8 @@ api.interceptors.response.use(
         // Let's keep user_data in SecureStore for consistency.
         await SecureStore.deleteItemAsync('user_data');
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);
@@ -97,6 +144,7 @@ export const expensesAPI = {
   scanReceipt: (formData) => api.post('transactions/scan/', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  getAnalytics: () => api.get('transactions/analytics/'),
 };
 
 // Goals
@@ -113,14 +161,16 @@ export const investmentsAPI = {
   list: (params) => api.get('investments/holdings/', { params }),
   get: (id) => api.get(`investments/holdings/${id}/`),
   create: (data) => api.post('investments/holdings/', data),
-  update: (id, data) => api.put(`investments/holdings/${id}/`, data),
+  update: (id, data) => api.patch(`investments/holdings/${id}/`, data),
   delete: (id) => api.delete(`investments/holdings/${id}/`),
+  addUnits: (id, data) => api.post(`investments/holdings/${id}/add-units/`, data),
   assets: (params) => api.get('investments/assets/', { params }),
   priceHistory: (params) => api.get('investments/price-history/', { params }),
   getQuote: (symbol) => api.get(`investments/quote/?symbol=${symbol}`),
   getChartData: (symbol) => api.get(`investments/chart/?symbol=${symbol}`),
   refreshPrices: () => api.post('investments/refresh-prices/'),
   searchSymbol: (query) => api.get(`investments/search/?q=${query}`),
+  getAnalytics: () => api.get('investments/analytics/'),
 };
 
 // AI Coach

@@ -9,6 +9,8 @@ from .views import (
     refresh_prices_view,
     search_symbol_view,
     investment_chart_view,
+    add_units_view,
+    investments_analytics_view,
 )
 
 urlpatterns = [
@@ -28,4 +30,8 @@ urlpatterns = [
     path('search/', search_symbol_view, name='search-symbol'),
     # Chart data for symbol
     path('chart/', investment_chart_view, name='investment-chart'),
+    # Add units to existing holding
+    path('holdings/<uuid:pk>/add-units/', add_units_view, name='add-units'),
+    # Analytics for investments
+    path('analytics/', investments_analytics_view, name='investment-analytics'),
 ]

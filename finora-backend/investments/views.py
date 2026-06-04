@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import Asset, Holding, PriceHistory
-from .serializers import AssetSerializer, HoldingSerializer, PriceHistorySerializer
+from .serializers import AssetSerializer, HoldingSerializer, PriceHistorySerializer, AddUnitsSerializer
 
 
 class AssetListView(generics.ListAPIView):
@@ -280,3 +280,77 @@ def investment_chart_view(request):
         })
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_units_view(request, pk):
+    """
+    POST /api/investments/holdings/<uuid>/add-units/
+    Add more units/amount to an existing holding.
+
+    Market-tracked holdings:
+        { "additional_quantity": 5, "buy_price_per_unit": 150.00 }
+
+    Manual holdings:
+        { "additional_amount": 5000, "new_current_value": 55000 }
+    """
+    try:
+        holding = Holding.objects.select_related('asset').get(
+            pk=pk, user=request.user
+        )
+    except Holding.DoesNotExist:
+        return Response({'error': 'Holding not found'}, status=404)
+
+    serializer = AddUnitsSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=400)
+
+    updated_holding = serializer.update_holding(holding)
+
+    # Return the full holding data
+    holding_data = HoldingSerializer(
+        updated_holding, context={'request': request}
+    ).data
+
+    return Response({
+        'message': 'Units added successfully',
+        'holding': holding_data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def investments_analytics_view(request):
+    """
+    Returns portfolio allocation by asset type and P&L for each holding.
+    """
+    user = request.user
+    holdings = Holding.objects.filter(user=user).select_related('asset')
+    
+    allocation = {}
+    pnl = []
+
+    for h in holdings:
+        # Allocation by type
+        inv_type = h.asset.asset_type
+        if inv_type not in allocation:
+            allocation[inv_type] = 0.0
+        allocation[inv_type] += float(h.market_value)
+        
+        # P&L
+        pnl.append({
+            "name": h.asset.name,
+            "symbol": h.asset.symbol,
+            "pnl": float(h.unrealized_pnl),
+            "pnl_pct": float(h.unrealized_pnl) / h.total_invested * 100 if h.total_invested > 0 else 0.0
+        })
+        
+    allocation_list = [{"label": k, "value": v} for k, v in allocation.items() if v > 0]
+    # Sort P&L by amount descending
+    pnl_list = sorted(pnl, key=lambda x: x['pnl'], reverse=True)
+
+    return Response({
+        'allocation': allocation_list,
+        'pnl': pnl_list
+    })
