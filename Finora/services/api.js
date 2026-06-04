@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
@@ -15,10 +15,11 @@ const getBaseUrl = () => {
     return `http://${hostUri.split(':')[0]}:8000/api/`;
   }
   
-  // Fallback
+  // Fallback for Android Emulator
   if (Platform.OS === 'android') return 'http://10.0.2.2:8000/api/';
   
-  return 'http://192.168.18.15:8000/api/';
+  // Default fallback (could be changed to production URL later)
+  return 'http://localhost:8000/api/';
 };
 
 const BASE_URL = getBaseUrl();
@@ -34,7 +35,7 @@ const api = axios.create({
 // Request interceptor to add JWT token
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('access_token');
+    const token = await SecureStore.getItemAsync('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -44,26 +45,70 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// ── Token refresh queue to prevent race conditions ──
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 // Response interceptor to handle token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    console.error(`[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.baseURL}${error.config?.url} -> ${error.response?.status}`);
     const originalRequest = error.config;
+
+    // Only log non-401 errors as errors; 401 is a normal token-expiry flow
+    if (error.response?.status !== 401) {
+      console.error(`[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.url} -> ${error.response?.status}`);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        }).catch((err) => Promise.reject(err));
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
+
       try {
-        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        const refreshToken = await SecureStore.getItemAsync('refresh_token');
+        if (!refreshToken) {
+          throw new Error('No refresh token');
+        }
         const response = await axios.post(`${BASE_URL}auth/refresh/`, {
           refresh: refreshToken,
         });
         const { access } = response.data;
-        await AsyncStorage.setItem('access_token', access);
+        await SecureStore.setItemAsync('access_token', access);
+
+        // Process queued requests with new token
+        processQueue(null, access);
+
         originalRequest.headers.Authorization = `Bearer ${access}`;
         return api(originalRequest);
       } catch (refreshError) {
-        await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user_data']);
+        processQueue(refreshError, null);
+        await SecureStore.deleteItemAsync('access_token');
+        await SecureStore.deleteItemAsync('refresh_token');
+        await SecureStore.deleteItemAsync('user_data');
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);
@@ -91,6 +136,7 @@ export const expensesAPI = {
   scanReceipt: (formData) => api.post('transactions/scan/', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  getAnalytics: () => api.get('transactions/analytics/'),
 };
 
 // Goals
@@ -107,14 +153,16 @@ export const investmentsAPI = {
   list: (params) => api.get('investments/holdings/', { params }),
   get: (id) => api.get(`investments/holdings/${id}/`),
   create: (data) => api.post('investments/holdings/', data),
-  update: (id, data) => api.put(`investments/holdings/${id}/`, data),
+  update: (id, data) => api.patch(`investments/holdings/${id}/`, data),
   delete: (id) => api.delete(`investments/holdings/${id}/`),
+  addUnits: (id, data) => api.post(`investments/holdings/${id}/add-units/`, data),
   assets: (params) => api.get('investments/assets/', { params }),
   priceHistory: (params) => api.get('investments/price-history/', { params }),
   getQuote: (symbol) => api.get(`investments/quote/?symbol=${symbol}`),
   getChartData: (symbol) => api.get(`investments/chart/?symbol=${symbol}`),
   refreshPrices: () => api.post('investments/refresh-prices/'),
   searchSymbol: (query) => api.get(`investments/search/?q=${query}`),
+  getAnalytics: () => api.get('investments/analytics/'),
 };
 
 // AI Coach

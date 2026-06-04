@@ -110,21 +110,35 @@ export default function GoalsScreen() {
         </View>
       </LinearGradient>
 
-      {/* Stats bar */}
-      <View style={{flexDirection: 'row',backgroundColor: '#FFFFFF',margin: 16,borderRadius: 16,padding: 16,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 6,elevation: 3}}>
-        <View style={{flex: 1,alignItems: 'center'}}>
-          <Text style={{fontSize: 18,fontWeight: '800',color: '#111827'}}>{goals.filter(g => !g.is_completed).length}</Text>
-          <Text style={{fontSize: 11,color: '#9CA3AF',marginTop: 2,fontWeight: '600'}}>Active</Text>
+      {/* Goals Progress Overview */}
+      <View style={{ margin: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 }}>Overall Progress</Text>
+        
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+          <View>
+            <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '500' }}>Total Saved</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981' }}>{fmt(totalSaved)}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '500' }}>Total Target</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{fmt(totalTargeted)}</Text>
+          </View>
         </View>
-        <View style={{width: 1,backgroundColor: '#F3F4F6',marginHorizontal: 8}} />
-        <View style={{flex: 1,alignItems: 'center'}}>
-          <Text style={{fontSize: 18,fontWeight: '800',color: '#111827'}}>{goals.filter(g => g.is_completed).length}</Text>
-          <Text style={{fontSize: 11,color: '#9CA3AF',marginTop: 2,fontWeight: '600'}}>Completed</Text>
+
+        <View style={{ height: 12, backgroundColor: '#F3F4F6', borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}>
+          <View style={{ width: `${totalTargeted > 0 ? (totalSaved / totalTargeted) * 100 : 0}%`, height: '100%', backgroundColor: '#2563EB', borderRadius: 6 }} />
         </View>
-        <View style={{width: 1,backgroundColor: '#F3F4F6',marginHorizontal: 8}} />
-        <View style={{flex: 1,alignItems: 'center'}}>
-          <Text style={{fontSize: 18,fontWeight: '800',color: '#111827'}}>{fmt(totalSaved)}</Text>
-          <Text style={{fontSize: 11,color: '#9CA3AF',marginTop: 2,fontWeight: '600'}}>Saved</Text>
+
+        <View style={{ flexDirection: 'row', paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{goals.filter(g => !g.is_completed).length}</Text>
+            <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2, fontWeight: '600' }}>Active</Text>
+          </View>
+          <View style={{ width: 1, backgroundColor: '#F3F4F6', marginHorizontal: 8 }} />
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{goals.filter(g => g.is_completed).length}</Text>
+            <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2, fontWeight: '600' }}>Completed</Text>
+          </View>
         </View>
       </View>
 
@@ -147,7 +161,7 @@ export default function GoalsScreen() {
       ) : (
         <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 20 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 160 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadGoals(); }} tintColor="#2563EB" />}
         >
           {goals.length === 0 ? (
@@ -215,7 +229,11 @@ function GoalCard({
   const progress = goal.progress_percentage || goal.progress_pct || 0;
 
   return (
-    <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 16,marginBottom: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 4}}>
+    <TouchableOpacity 
+      activeOpacity={0.8}
+      onPress={onEdit}
+      style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 16,marginBottom: 12,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 4}}
+    >
       <View style={{flexDirection: 'row',alignItems: 'center',marginBottom: 14,gap: 12}}>
         <View style={[{width: 48,height: 48,borderRadius: 14,justifyContent: 'center',alignItems: 'center'}, { backgroundColor: `${color}18` }]}>
           <Ionicons name={icon} size={24} color={color} />
@@ -231,9 +249,6 @@ function GoalCard({
           </View>
         )}
         <View style={{ flexDirection: 'row', gap: 6 }}>
-          <TouchableOpacity onPress={onEdit} style={{ padding: 4 }}>
-            <Ionicons name="pencil-outline" size={18} color="#2563EB" />
-          </TouchableOpacity>
           <TouchableOpacity onPress={onDelete} style={{ padding: 4 }}>
             <Ionicons name="trash-outline" size={18} color="#EF4444" />
           </TouchableOpacity>
@@ -256,6 +271,6 @@ function GoalCard({
           <Text style={{fontSize: 12,color: '#6B7280',marginTop: 8}}>🎯 Target: {goal.deadline}</Text>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }

@@ -3,6 +3,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
+from django.db.models import Sum
+from django.db.models.functions import TruncDate
+from django.utils import timezone
+from datetime import timedelta
 from .models import Transaction
 from .serializers import TransactionSerializer
 import re
@@ -106,3 +110,36 @@ class TransactionDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Transaction.objects.filter(user=self.request.user)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def transactions_analytics_view(request):
+    """
+    Returns daily expense totals for the heatmap (last 60 days to ensure enough data).
+    """
+    user = request.user
+    sixty_days_ago = timezone.now() - timedelta(days=60)
+    
+    # Expenses
+    daily_qs = Transaction.objects.filter(
+        user=user, 
+        txn_type='expense', 
+        date__gte=sixty_days_ago
+    )
+    daily = daily_qs.values('date').annotate(total=Sum('amount')).order_by('date')
+    daily_spending = [{"date": str(d['date']), "total": float(d['total'])} for d in daily if d['date']]
+
+    # Income
+    income_qs = Transaction.objects.filter(
+        user=user, 
+        txn_type='income', 
+        date__gte=sixty_days_ago
+    )
+    income_daily = income_qs.values('date').annotate(total=Sum('amount')).order_by('date')
+    daily_income = [{"date": str(d['date']), "total": float(d['total'])} for d in income_daily if d['date']]
+
+    return Response({
+        'daily_spending': daily_spending,
+        'daily_income': daily_income,
+    })

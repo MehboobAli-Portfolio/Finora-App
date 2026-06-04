@@ -153,9 +153,13 @@ export default function EditExpenseScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <KeyboardAwareScrollView enableOnAndroid={true} extraScrollHeight={20} showsVerticalScrollIndicator={false} contentContainerStyle={{
-        padding: 20
-      }}>
+        <KeyboardAwareScrollView 
+          enableOnAndroid={true} 
+          extraScrollHeight={200} 
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+        >
           {/* Type Toggle */}
           <View style={{flexDirection: 'row',backgroundColor: '#F3F4F6',borderRadius: 14,padding: 4,marginBottom: 24}}>
             <TouchableOpacity

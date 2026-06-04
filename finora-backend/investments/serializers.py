@@ -311,6 +311,154 @@ class HoldingSerializer(serializers.ModelSerializer):
         return holding
 
 
+    def update(self, instance, validated_data):
+        """Handle updates from the edit-investment screen."""
+        name = validated_data.pop('_name', None)
+        symbol_input = validated_data.pop('_symbol', None)
+        inv_type = validated_data.pop('_investment_type', None)
+        amount = validated_data.pop('_amount', None)
+        current_value = validated_data.pop('_current_value', None)
+        quantity_input = validated_data.pop('_quantity', None)
+        buy_price_input = validated_data.pop('_buy_price', None)
+        purchase_date_str = validated_data.pop('_purchase_date', None)
+        description = validated_data.pop('_description', None)
+        monthly_income = validated_data.pop('_monthly_income', None)
+
+        # Update asset name if provided
+        if name and instance.asset:
+            instance.asset.name = name
+            instance.asset.save(update_fields=['name'])
+
+        # Determine tracking mode
+        MARKET_TYPES = {'stocks', 'crypto', 'etf', 'nft'}
+        HYBRID_TYPES = {'mutual_funds', 'bonds', 'gold'}
+        effective_type = inv_type or (instance.asset.asset_type if instance.asset else 'stock')
+        effective_symbol = symbol_input.strip().upper() if symbol_input else (instance.asset.symbol if instance.asset else '')
+        is_market = instance.asset.exchange != 'MANUAL' if instance.asset else False
+
+        if quantity_input is not None and buy_price_input is not None:
+            instance.quantity = Decimal(str(quantity_input))
+            instance.avg_buy_price = Decimal(str(buy_price_input))
+        elif amount is not None:
+            instance.quantity = Decimal('1')
+            instance.avg_buy_price = Decimal(str(amount))
+
+        # Update current price
+        if is_market and effective_symbol:
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(effective_symbol)
+                info = ticker.fast_info
+                live_price = getattr(info, 'last_price', None)
+                if live_price:
+                    instance.current_price = Decimal(str(round(live_price, 8)))
+            except Exception:
+                pass
+        elif current_value is not None:
+            instance.current_price = Decimal(str(current_value))
+
+        # Parse purchase date
+        if purchase_date_str:
+            try:
+                from datetime import date as dt_date
+                parts = purchase_date_str.split('-')
+                if len(parts) == 3:
+                    instance.purchase_date = dt_date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except (ValueError, IndexError):
+                pass
+
+        if description is not None:
+            instance.notes = description or None
+        if monthly_income is not None:
+            instance.monthly_income = monthly_income or 0
+
+        # Recalculate unrealized P&L
+        instance.unrealized_pnl = float(instance.quantity * instance.current_price) - float(instance.quantity * instance.avg_buy_price)
+        instance.save()
+        return instance
+
+
+class AddUnitsSerializer(serializers.Serializer):
+    """
+    Handles adding more units/amount to an existing holding.
+    Works for ALL investment types.
+    """
+    # Market-tracked mode fields
+    additional_quantity = serializers.DecimalField(
+        max_digits=18, decimal_places=8, required=False, allow_null=True
+    )
+    buy_price_per_unit = serializers.DecimalField(
+        max_digits=18, decimal_places=8, required=False, allow_null=True
+    )
+    # Manual mode fields
+    additional_amount = serializers.DecimalField(
+        max_digits=18, decimal_places=2, required=False, allow_null=True
+    )
+    new_current_value = serializers.DecimalField(
+        max_digits=18, decimal_places=2, required=False, allow_null=True
+    )
+
+    def validate(self, data):
+        has_qty = data.get('additional_quantity') and data.get('buy_price_per_unit')
+        has_amt = data.get('additional_amount')
+        if not has_qty and not has_amt:
+            raise serializers.ValidationError(
+                'Provide either (additional_quantity + buy_price_per_unit) or additional_amount.'
+            )
+        return data
+
+    def update_holding(self, holding):
+        data = self.validated_data
+        additional_qty = data.get('additional_quantity')
+        buy_price = data.get('buy_price_per_unit')
+        additional_amt = data.get('additional_amount')
+        new_current_value = data.get('new_current_value')
+
+        is_market = holding.asset.exchange != 'MANUAL' if holding.asset else False
+
+        if additional_qty and buy_price:
+            # Weighted average cost calculation
+            old_total_cost = holding.avg_buy_price * holding.quantity
+            new_qty = Decimal(str(additional_qty))
+            new_price = Decimal(str(buy_price))
+            new_cost = new_qty * new_price
+
+            holding.quantity += new_qty
+            if holding.quantity > 0:
+                holding.avg_buy_price = (old_total_cost + new_cost) / holding.quantity
+            else:
+                holding.avg_buy_price = new_price
+
+            # Fetch live price for market-tracked
+            if is_market and holding.asset:
+                try:
+                    import yfinance as yf
+                    ticker = yf.Ticker(holding.asset.symbol)
+                    info = ticker.fast_info
+                    live_price = getattr(info, 'last_price', None)
+                    if live_price:
+                        holding.current_price = Decimal(str(round(live_price, 8)))
+                except Exception:
+                    pass
+        elif additional_amt:
+            # Manual mode: quantity stays 1, avg_buy_price = total invested
+            additional = Decimal(str(additional_amt))
+            old_invested = holding.avg_buy_price * holding.quantity
+            holding.avg_buy_price = old_invested + additional
+            holding.quantity = Decimal('1')
+
+            if new_current_value is not None:
+                holding.current_price = Decimal(str(new_current_value))
+            else:
+                # Keep current price as the new total invested
+                holding.current_price = holding.avg_buy_price
+
+        # Recalculate unrealized P&L
+        holding.unrealized_pnl = float(holding.quantity * holding.current_price) - float(holding.quantity * holding.avg_buy_price)
+        holding.save()
+        return holding
+
+
 class PriceHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = PriceHistory

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { investmentsAPI } from '../services/api';
 
 const INVEST_TYPES = [
@@ -92,7 +93,22 @@ export default function AddInvestmentScreen() {
   const [fetchingPrice, setFetchingPrice] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [existingHoldings, setExistingHoldings] = useState([]);
   const searchTimeout = useRef(null);
+
+  React.useEffect(() => {
+    fetchHoldings();
+  }, []);
+
+  const fetchHoldings = async () => {
+    try {
+      const res = await investmentsAPI.list();
+      setExistingHoldings(res.data || []);
+    } catch (e) {
+      console.log('Failed to fetch holdings for deduplication');
+    }
+  };
 
   const isMarket = MARKET_TYPES.includes(investType);
   const isHybrid = HYBRID_TYPES.includes(investType);
@@ -159,6 +175,26 @@ export default function AddInvestmentScreen() {
     if (!name || name === '') setName(symName);
     setSearchResults([]);
     fetchQuote(sym);
+    
+    // Check for existing position
+    const existing = existingHoldings.find(h => h.symbol?.toUpperCase() === sym.toUpperCase());
+    if (existing) {
+      Alert.alert(
+        'Existing Position Found',
+        `You already own ${existing.quantity} units of ${sym}. Adding this as a new entry might clutter your portfolio. Would you like to edit the existing position instead?`,
+        [
+          { text: 'Add as New', style: 'cancel' },
+          { text: 'Edit Existing', onPress: () => router.push({ pathname: '/edit-investment', params: { id: existing.id } }) }
+        ]
+      );
+    }
+  };
+
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setPurchaseDate(selectedDate.toISOString().split('T')[0]);
+    }
   };
 
   const totalInvested = useTickerMode && quantity && buyPrice
@@ -221,7 +257,13 @@ export default function AddInvestmentScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <KeyboardAwareScrollView enableOnAndroid={true} extraScrollHeight={20} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
+        <KeyboardAwareScrollView 
+          enableOnAndroid={true} 
+          extraScrollHeight={200} 
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+        >
           {/* Type Selector */}
           <View style={s.section}>
             <Text style={s.label}>Investment Type</Text>
@@ -419,8 +461,24 @@ export default function AddInvestmentScreen() {
           {/* Purchase Date */}
           <View style={s.section}>
             <Text style={s.label}>Purchase Date</Text>
-            <TextInput style={s.input} value={purchaseDate} onChangeText={setPurchaseDate}
-              placeholder="YYYY-MM-DD" placeholderTextColor="#9CA3AF" />
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(true)}
+              style={s.input}
+            >
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 15, color: '#111827' }}>{purchaseDate}</Text>
+                <Ionicons name="calendar-outline" size={20} color="#9CA3AF" />
+              </View>
+            </TouchableOpacity>
+            
+            {showDatePicker && (
+              <DateTimePicker
+                value={new Date(purchaseDate)}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+              />
+            )}
           </View>
 
           {/* Notes */}

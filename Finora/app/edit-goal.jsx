@@ -139,9 +139,13 @@ export default function EditGoalScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <KeyboardAwareScrollView enableOnAndroid={true} extraScrollHeight={20} showsVerticalScrollIndicator={false} contentContainerStyle={{
-        padding: 20
-      }}>
+        <KeyboardAwareScrollView 
+          enableOnAndroid={true} 
+          extraScrollHeight={200} 
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+        >
           {/* Target amount */}
           <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 20,marginBottom: 20,alignItems: 'center',shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 3}}>
             <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '700',textTransform: 'uppercase',letterSpacing: 0.5,marginBottom: 8}}>Target Amount</Text>

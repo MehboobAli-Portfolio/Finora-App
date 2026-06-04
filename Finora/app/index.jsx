@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { useEffect } from 'react';
 
 const {
   width,
@@ -9,6 +11,16 @@ const {
 } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace('/(tabs)');
+    }
+  }, [user, loading]);
+
+  if (loading) return null; // Or a splash screen, but _layout handles global loading
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F7F9FC' }}>
       {/* Background Gradient Layer */}

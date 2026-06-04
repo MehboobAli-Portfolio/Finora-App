@@ -57,7 +57,7 @@ export default function RegisterScreen() {
       router.replace('/(tabs)');
     } catch (error) {
       if (!error.response) {
-        Alert.alert('Network Error', 'Cannot connect to the server. Please make sure your backend is running on 0.0.0.0:8000.');
+        Alert.alert('Network Error', 'Could not reach the server. Please check your internet connection and try again.');
         return;
       }
       const data = error.response.data;
