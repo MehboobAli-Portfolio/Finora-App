@@ -105,6 +105,14 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         await SecureStore.deleteItemAsync('access_token');
         await SecureStore.deleteItemAsync('refresh_token');
+        originalRequest.headers.Authorization = `Bearer ${access}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        await SecureStore.deleteItemAsync('access_token');
+        await SecureStore.deleteItemAsync('refresh_token');
+        // user_data can stay in AsyncStorage as it's not sensitive, but for consistency we can move it or leave it.
+        // AsyncStorage.removeItem('user_data') is still needed if we don't move it.
+        // Let's keep user_data in SecureStore for consistency.
         await SecureStore.deleteItemAsync('user_data');
         return Promise.reject(refreshError);
       } finally {

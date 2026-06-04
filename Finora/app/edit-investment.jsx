@@ -66,6 +66,7 @@ export default function EditInvestmentScreen() {
       setMonthlyIncome(data.monthly_income ? String(data.monthly_income) : '');
       setPurchaseDate(data.purchase_date || new Date().toISOString().split('T')[0]);
       setDescription(data.notes || '');
+      setDescription(data.description || '');
     } catch (e) {
       Alert.alert('Error', 'Failed to load investment data');
       router.back();

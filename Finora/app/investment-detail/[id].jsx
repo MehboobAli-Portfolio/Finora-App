@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, Alert, TextInput, Modal, KeyboardAvoidingView, Platform
 } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -229,6 +230,15 @@ export default function InvestmentDetailScreen() {
             <Ionicons name="add-circle-outline" size={20} color={accentColor} />
             <Text style={[styles.actionButtonText, { color: accentColor }]}>Add Units</Text>
           </TouchableOpacity>
+          {holding.is_market_tracked && (
+            <TouchableOpacity 
+              style={[styles.actionButton, { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: theme.colors.primary }]}
+              onPress={() => Alert.alert('Add Units', 'To add more units, please use the Edit screen to update your total quantity and adjust your average buy price. Advanced DCA calculator coming soon!')}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={theme.colors.primary} />
+              <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Add Units</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 
