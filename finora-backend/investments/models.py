@@ -43,6 +43,7 @@ class Holding(models.Model):
 
     class Meta:
         unique_together = ('user', 'asset')
+        ordering = ['-last_updated']
 
     @property
     def market_value(self):
