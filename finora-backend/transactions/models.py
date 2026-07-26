@@ -41,6 +41,9 @@ class Transaction(models.Model):
 
     class Meta:
         ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'txn_type', 'date']),
+        ]
 
     def __str__(self):
         return f"{self.user.email} - {self.txn_type} {self.amount}"

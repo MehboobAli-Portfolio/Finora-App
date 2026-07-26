@@ -35,8 +35,11 @@ class Goal(models.Model):
     class Meta:
         ordering = ['-deadline']
 
-    def __str__(self):
-        return f"{self.user.email} - {self.name}"
+    def save(self, *args, **kwargs):
+        # Auto-revert status if target was raised above current deposits
+        if self.pk and self.current_amount < self.target_amount and self.status == 'completed':
+            self.status = 'active'
+        super().save(*args, **kwargs)
 
     @property
     def progress_pct(self):
@@ -58,15 +61,6 @@ class GoalDeposit(models.Model):
     note = models.TextField(null=True, blank=True)
     deposited_at = models.DateTimeField(auto_now_add=True)
 
-    def save(self, *args, **kwargs):
-        is_new = self._state.adding
-        super().save(*args, **kwargs)
-        if is_new:
-            # Update goal current_amount
-            self.goal.current_amount = float(self.goal.current_amount) + float(self.amount)
-            if self.goal.current_amount >= self.goal.target_amount:
-                self.goal.status = 'completed'
-            self.goal.save()
-
     def __str__(self):
         return f"Deposit {self.amount} for {self.goal.name}"
+

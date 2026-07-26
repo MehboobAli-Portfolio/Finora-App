@@ -43,20 +43,23 @@ class Holding(models.Model):
 
     class Meta:
         unique_together = ('user', 'asset')
+        ordering = ['-last_updated']
 
     @property
     def market_value(self):
         """Total current market value = quantity × current_price"""
-        qty = self.quantity or 0
-        price = self.current_price or 0
-        return float(qty * price)
+        from decimal import Decimal
+        qty = self.quantity or Decimal('0')
+        price = self.current_price or Decimal('0')
+        return qty * price
 
     @property
     def total_invested(self):
         """Total invested = quantity × avg_buy_price"""
-        qty = self.quantity or 0
-        buy = self.avg_buy_price or 0
-        return float(qty * buy)
+        from decimal import Decimal
+        qty = self.quantity or Decimal('0')
+        buy = self.avg_buy_price or Decimal('0')
+        return qty * buy
 
     def __str__(self):
         return f"{self.user.email} - {self.asset.symbol}"

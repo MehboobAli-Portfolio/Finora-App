@@ -116,7 +116,7 @@ export default function AiScreen() {
             <View style={{ alignSelf: 'flex-start', maxWidth: '85%', marginBottom: 16 }}>
               <View style={{ padding: 16, borderRadius: 20, backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <ActivityIndicator size="small" color="#2563EB" />
-                <Text style={{ fontSize: 14, color: '#94A3B8', fontWeight: '500' }}>Thinking...</Text>
+                <Text style={{ fontSize: 14, color: '#94A3B8', fontWeight: '500' }}>Finding best answer...</Text>
               </View>
             </View>
           )}

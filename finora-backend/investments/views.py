@@ -117,6 +117,7 @@ def refresh_prices_view(request):
     """
     POST /api/investments/refresh-prices/
     Fetches latest live prices for ALL market-tracked holdings of the current user.
+    Uses batch download for efficiency (single network call).
     Returns the updated holdings.
     """
     holdings = Holding.objects.filter(
@@ -133,30 +134,46 @@ def refresh_prices_view(request):
 
     try:
         import yfinance as yf
-        
-        # Collect all symbols to fetch at once
-        symbols = [h.asset.symbol for h in holdings]
-        
-        # Fetch prices for all symbols
-        for holding in holdings:
-            try:
-                ticker = yf.Ticker(holding.asset.symbol)
-                info = ticker.fast_info
-                live_price = getattr(info, 'last_price', None)
-                
-                if live_price is not None:
-                    holding.current_price = Decimal(str(round(live_price, 8)))
-                    holding.unrealized_pnl = (
-                        holding.quantity * holding.current_price
-                    ) - (
-                        holding.quantity * holding.avg_buy_price
-                    )
-                    holding.save(update_fields=['current_price', 'unrealized_pnl', 'last_updated'])
-                    updated_count += 1
+
+        # Collect all symbols and batch-download in a single network call
+        symbols = list(set(h.asset.symbol for h in holdings))
+        prices = {}
+
+        try:
+            # Batch download — single HTTP request for all tickers
+            df = yf.download(symbols, period='1d', progress=False, threads=True)
+            if not df.empty:
+                # yf.download returns multi-level columns when multiple symbols
+                if len(symbols) == 1:
+                    last_price = float(df['Close'].iloc[-1])
+                    prices[symbols[0]] = last_price
                 else:
-                    errors.append(f'{holding.asset.symbol}: No price data')
-            except Exception as e:
-                errors.append(f'{holding.asset.symbol}: {str(e)[:50]}')
+                    for sym in symbols:
+                        try:
+                            close_col = df['Close'][sym]
+                            last_price = float(close_col.dropna().iloc[-1])
+                            prices[sym] = last_price
+                        except (KeyError, IndexError):
+                            errors.append(f'{sym}: No data in batch')
+        except Exception as e:
+            errors.append(f'Batch download failed: {str(e)[:80]}')
+
+        # Update holdings with fetched prices
+        for holding in holdings:
+            sym = holding.asset.symbol
+            live_price = prices.get(sym)
+            if live_price is not None:
+                holding.current_price = Decimal(str(round(live_price, 8)))
+                holding.unrealized_pnl = (
+                    holding.quantity * holding.current_price
+                ) - (
+                    holding.quantity * holding.avg_buy_price
+                )
+                holding.save(update_fields=['current_price', 'unrealized_pnl', 'last_updated'])
+                updated_count += 1
+            elif sym not in [e.split(':')[0] for e in errors]:
+                errors.append(f'{sym}: No price data')
+
     except ImportError:
         return Response({'error': 'yfinance not installed'}, status=500)
 
@@ -267,8 +284,11 @@ def investment_chart_view(request):
             return Response({"error": f"No historical data found for {symbol}"}, status=404)
             
         # Format the data for the frontend chart
+        import math
         chart_data = []
         for index, row in hist.iterrows():
+            if math.isnan(row['Close']):
+                continue
             chart_data.append({
                 "date": index.strftime('%Y-%m-%d'),
                 "price": round(float(row['Close']), 2)
@@ -339,11 +359,12 @@ def investments_analytics_view(request):
         allocation[inv_type] += float(h.market_value)
         
         # P&L
+        total_invested = float(h.total_invested)
         pnl.append({
             "name": h.asset.name,
             "symbol": h.asset.symbol,
             "pnl": float(h.unrealized_pnl),
-            "pnl_pct": float(h.unrealized_pnl) / h.total_invested * 100 if h.total_invested > 0 else 0.0
+            "pnl_pct": float(h.unrealized_pnl) / total_invested * 100 if total_invested > 0 else 0.0
         })
         
     allocation_list = [{"label": k, "value": v} for k, v in allocation.items() if v > 0]
