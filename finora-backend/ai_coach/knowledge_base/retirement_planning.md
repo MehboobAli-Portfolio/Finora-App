@@ -1,0 +1,22 @@
+# Retirement Planning
+
+## How much money do I need to retire?
+A common guideline is the 25x rule: multiply your expected annual expenses in retirement by 25. If you expect to spend $40,000 per year in retirement, you need approximately $1,000,000 saved. This is based on the 4% safe withdrawal rate — research shows that withdrawing 4% of your portfolio annually has historically lasted at least 30 years. For a more comfortable retirement, aim for 30x your annual expenses. Remember that your expenses in retirement may be lower (no commute, no work clothes, mortgage might be paid off) or higher (healthcare costs increase significantly with age).
+
+## What is a 401k?
+A 401k is an employer-sponsored retirement savings plan. You contribute pre-tax dollars directly from your paycheck, which lowers your taxable income. Many employers offer a match — for example, matching 50% of your contributions up to 6% of your salary. If you earn $60,000 and contribute 6% ($3,600), your employer adds another $1,800 — that is free money you should never leave on the table. The 2024 contribution limit is $23,000 (plus $7,500 catch-up for those 50 and older). Money grows tax-deferred and is taxed when withdrawn in retirement. Early withdrawals before age 59.5 typically incur a 10% penalty plus income taxes.
+
+## What is an IRA (Individual Retirement Account)?
+An IRA is a personal retirement account you open on your own (not through an employer). There are two main types: Traditional IRA (contributions may be tax-deductible, money grows tax-deferred, taxed on withdrawal) and Roth IRA (contributions are after-tax, money grows tax-free, withdrawals are tax-free). The 2024 annual contribution limit for IRAs is $7,000 ($8,000 if 50 or older). Roth IRAs have income limits — in 2024, eligibility phases out between $146,000-$161,000 for single filers. If you exceed the limit, you can use a Backdoor Roth IRA strategy.
+
+## What is the FIRE movement?
+FIRE stands for Financial Independence, Retire Early. The core idea is to save and invest 50-70% of your income aggressively so you can retire in your 30s or 40s instead of your 60s. There are several variations: Lean FIRE (retiring on a minimal budget, typically under $40,000/year), Fat FIRE (retiring with a comfortable lifestyle, $100,000+ per year), Coast FIRE (saving enough early that compound growth will cover your retirement, then working a lower-stress job), and Barista FIRE (semi-retiring and working part-time for benefits like health insurance). The math works because of compound interest and the 4% withdrawal rule.
+
+## When should I start saving for retirement?
+As early as possible. Due to compound interest, starting at age 25 versus 35 makes a massive difference. If you invest $500/month starting at 25 at 8% average return, you will have approximately $1,745,000 by age 65. If you start the same $500/month at 35, you will only have approximately $745,000 — less than half. Even if you can only invest $100/month in your 20s, start now. The most important factor in building retirement wealth is time in the market, not timing the market.
+
+## What is the difference between Traditional and Roth accounts?
+Traditional accounts (401k, IRA): You get a tax deduction NOW when you contribute, your money grows tax-deferred, and you pay income taxes LATER when you withdraw in retirement. Best if you are in a high tax bracket now and expect to be in a lower bracket in retirement. Roth accounts (Roth 401k, Roth IRA): You pay taxes NOW on your contributions (no deduction), your money grows completely tax-free, and you pay ZERO taxes on withdrawals in retirement. Best if you are in a low tax bracket now and expect to be in a higher bracket later, or if you want tax-free income in retirement. Many financial advisors recommend having both types for tax diversification.
+
+## How do I catch up on retirement savings if I started late?
+If you are starting in your 40s or 50s, here is how to catch up: Maximize your 401k contributions — the 2024 limit is $23,000, plus an additional $7,500 catch-up contribution if you are 50 or older. Open and max out a Roth IRA ($7,000 or $8,000 if 50+). Reduce expenses aggressively and redirect savings to investments. Consider working 2-3 extra years, which gives your money more time to compound and reduces the number of years you need to fund in retirement. Delay Social Security until age 70 if possible, as your monthly benefit increases by about 8% for each year you delay past 62.

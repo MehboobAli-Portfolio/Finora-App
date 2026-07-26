@@ -64,7 +64,7 @@ export default function ExpensesScreen() {
       const params = {};
       if (activeFilter !== 'All') params.type = activeFilter;
       const res = await expensesAPI.list(params);
-      setExpenses(res.data);
+      setExpenses(res.data.results || res.data);
     } catch (e) {
       console.error(e);
     } finally {

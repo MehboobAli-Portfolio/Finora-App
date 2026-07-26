@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Case, When, DecimalField, Value
 
 from transactions.models import Transaction
 from transactions.serializers import TransactionSerializer
@@ -14,6 +14,7 @@ from investments.models import Holding
 
 from .ai_logic import FinoraAI
 from .models import AIConversation, AIMessage
+from .smart_router import SmartRouter
 
 
 def _get_month_start():
@@ -21,20 +22,35 @@ def _get_month_start():
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
+# Maximum approximate character budget for chat history context
+_CHAT_HISTORY_CHAR_CAP = 4000
+
+
 def _build_ai_engine(user, include_investments=False, include_categories=False, include_recent=False):
     """
     Helper: gather financial context for a user and return a loaded FinoraAI instance.
+    Uses a single Case/When aggregate query instead of multiple DB round-trips.
     """
     month_start = _get_month_start()
 
-    expense_only = (
-        Transaction.objects.filter(user=user, date__gte=month_start, txn_type='expense')
-        .aggregate(total=Sum('amount'))['total'] or 0
+    # ── Single query: monthly income + expenses via Case/When ─────────
+    aggregates = Transaction.objects.filter(user=user).aggregate(
+        monthly_expenses=Sum(
+            Case(
+                When(date__gte=month_start, txn_type='expense', then='amount'),
+                default=Value(0), output_field=DecimalField(),
+            )
+        ),
+        monthly_income=Sum(
+            Case(
+                When(date__gte=month_start, txn_type='income', then='amount'),
+                default=Value(0), output_field=DecimalField(),
+            )
+        ),
     )
-    total_income = (
-        Transaction.objects.filter(user=user, date__gte=month_start, txn_type='income')
-        .aggregate(total=Sum('amount'))['total'] or 0
-    )
+    expense_only = aggregates['monthly_expenses'] or 0
+    total_income = aggregates['monthly_income'] or 0
+
     balance       = float(total_income) - float(expense_only)
     goals_count   = Goal.objects.filter(user=user).count()
     completed     = Goal.objects.filter(user=user, status='completed').count()
@@ -54,12 +70,12 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
 
     recent_transactions = []
     if include_recent:
-        qs = Transaction.objects.filter(user=user).order_by('-date')[:12]
+        qs = Transaction.objects.filter(user=user).order_by('-date')[:8]
         recent_transactions = TransactionSerializer(qs, many=True).data
 
     investments = []
     if include_investments:
-        inv_qs = Holding.objects.filter(user=user).order_by('-last_updated')[:15]
+        inv_qs = Holding.objects.filter(user=user).order_by('-last_updated')[:10]
         investments = HoldingSerializer(inv_qs, many=True).data
 
     return FinoraAI(
@@ -75,6 +91,21 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
         spending_by_category=spending_by_category,
         investments=investments,
     )
+
+
+def _cap_chat_history(messages, char_cap=_CHAT_HISTORY_CHAR_CAP):
+    """Trim older messages from chat history so total characters stay under cap."""
+    capped = []
+    total_chars = 0
+    # Walk from newest to oldest, keep messages until we hit the cap
+    for msg in reversed(messages):
+        content_len = len(msg.get('content', ''))
+        if total_chars + content_len > char_cap and capped:
+            break
+        capped.append(msg)
+        total_chars += content_len
+    capped.reverse()
+    return capped
 
 
 # ── Views ─────────────────────────────────────────────────────────────────
@@ -128,12 +159,13 @@ def chat_view(request):
         content=message_text
     )
 
-    # Fetch last 15 messages for context
+    # Fetch last 15 messages for context, then cap by character budget
     recent_messages = conversation.messages.order_by('-created_at')[:15]
     chat_history = [
         {"role": m.role, "content": m.content, "intent": m.intent}
         for m in reversed(recent_messages)
     ]
+    chat_history = _cap_chat_history(chat_history)
 
     try:
         engine = _build_ai_engine(
@@ -142,7 +174,10 @@ def chat_view(request):
             include_categories=True,
             include_recent=True,
         )
-        reply, intent, entities = engine.process_chat_message(message_text, chat_history=chat_history)
+
+        # Use SmartRouter: Intent → RAG → Fallback
+        router = SmartRouter(engine)
+        reply, intent, entities = router.process_message(message_text, chat_history=chat_history)
         
         # Save Assistant Reply
         AIMessage.objects.create(

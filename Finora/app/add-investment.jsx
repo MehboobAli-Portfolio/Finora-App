@@ -104,7 +104,7 @@ export default function AddInvestmentScreen() {
   const fetchHoldings = async () => {
     try {
       const res = await investmentsAPI.list();
-      setExistingHoldings(res.data || []);
+      setExistingHoldings(res.data.results || res.data || []);
     } catch (e) {
       console.log('Failed to fetch holdings for deduplication');
     }

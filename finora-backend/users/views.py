@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
-from django.db.models import Sum
+from django.db.models import Sum, Case, When, DecimalField, Value
 from django.db.models.functions import TruncWeek, TruncDate
 from django.utils import timezone
 from datetime import timedelta
@@ -51,22 +51,40 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 def dashboard_view(request):
     user = request.user
 
-    from django.utils import timezone
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    # Monthly Transaction aggregation
-    monthly_income = Transaction.objects.filter(
-        user=user, date__gte=month_start, txn_type='income'
-    ).aggregate(total=Sum('amount'))['total'] or 0
-
-    monthly_expenses = Transaction.objects.filter(
-        user=user, date__gte=month_start, txn_type='expense'
-    ).aggregate(total=Sum('amount'))['total'] or 0
-
-    # Cumulative Balance
-    total_in = Transaction.objects.filter(user=user, txn_type='income').aggregate(total=Sum('amount'))['total'] or 0
-    total_ex = Transaction.objects.filter(user=user, txn_type='expense').aggregate(total=Sum('amount'))['total'] or 0
+    # ── Single query: monthly + all-time aggregation via Case/When ────
+    aggregates = Transaction.objects.filter(user=user).aggregate(
+        monthly_income=Sum(
+            Case(
+                When(date__gte=month_start, txn_type='income', then='amount'),
+                default=Value(0), output_field=DecimalField(),
+            )
+        ),
+        monthly_expenses=Sum(
+            Case(
+                When(date__gte=month_start, txn_type='expense', then='amount'),
+                default=Value(0), output_field=DecimalField(),
+            )
+        ),
+        alltime_income=Sum(
+            Case(
+                When(txn_type='income', then='amount'),
+                default=Value(0), output_field=DecimalField(),
+            )
+        ),
+        alltime_expenses=Sum(
+            Case(
+                When(txn_type='expense', then='amount'),
+                default=Value(0), output_field=DecimalField(),
+            )
+        ),
+    )
+    monthly_income = aggregates['monthly_income'] or 0
+    monthly_expenses = aggregates['monthly_expenses'] or 0
+    total_in = aggregates['alltime_income'] or 0
+    total_ex = aggregates['alltime_expenses'] or 0
     balance = float(total_in) - float(total_ex)
 
     # Portfolio value

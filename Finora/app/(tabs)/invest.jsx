@@ -43,7 +43,7 @@ export default function InvestScreen() {
 
   const { data: investments = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['investments'],
-    queryFn: async () => { const res = await investmentsAPI.list(); return res.data; }
+    queryFn: async () => { const res = await investmentsAPI.list(); return res.data.results || res.data; }
   });
 
   const { data: analytics, refetch: refetchAnalytics } = useQuery({

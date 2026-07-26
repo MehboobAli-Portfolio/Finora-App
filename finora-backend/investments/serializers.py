@@ -103,17 +103,17 @@ class HoldingSerializer(serializers.ModelSerializer):
 
     def get_return_amount(self, obj):
         """Profit/loss in absolute terms."""
-        invested = float(obj.quantity * obj.avg_buy_price)
-        current = float(obj.quantity * obj.current_price)
-        return round(current - invested, 2)
+        invested = obj.quantity * obj.avg_buy_price
+        current = obj.quantity * obj.current_price
+        return float(round(current - invested, 2))
 
     def get_return_percentage(self, obj):
         """Profit/loss as a percentage."""
-        invested = float(obj.quantity * obj.avg_buy_price)
+        invested = obj.quantity * obj.avg_buy_price
         if invested == 0:
             return 0.0
-        current = float(obj.quantity * obj.current_price)
-        return round(((current - invested) / invested) * 100, 2)
+        current = obj.quantity * obj.current_price
+        return float(round(((current - invested) / invested) * 100, 2))
 
     def get_is_market_tracked(self, obj):
         """Whether this holding auto-updates from market data."""
@@ -272,7 +272,7 @@ class HoldingSerializer(serializers.ModelSerializer):
                 pass
 
         # ── Compute unrealized P&L ─────────────────────────────────────
-        unrealized_pnl = float(quantity * current_price) - float(quantity * avg_buy_price)
+        unrealized_pnl = (quantity * current_price) - (quantity * avg_buy_price)
 
         # ── Create or update the holding ───────────────────────────────
         try:
@@ -299,7 +299,7 @@ class HoldingSerializer(serializers.ModelSerializer):
             new_total_cost = old_total_cost + (avg_buy_price * quantity)
             holding.avg_buy_price = new_total_cost / holding.quantity if holding.quantity > 0 else avg_buy_price
             holding.current_price = current_price
-            holding.unrealized_pnl = float(holding.quantity * holding.current_price) - float(holding.quantity * holding.avg_buy_price)
+            holding.unrealized_pnl = (holding.quantity * holding.current_price) - (holding.quantity * holding.avg_buy_price)
             if description:
                 holding.notes = description
             if monthly_income:
@@ -373,7 +373,7 @@ class HoldingSerializer(serializers.ModelSerializer):
             instance.monthly_income = monthly_income or 0
 
         # Recalculate unrealized P&L
-        instance.unrealized_pnl = float(instance.quantity * instance.current_price) - float(instance.quantity * instance.avg_buy_price)
+        instance.unrealized_pnl = (instance.quantity * instance.current_price) - (instance.quantity * instance.avg_buy_price)
         instance.save()
         return instance
 
@@ -454,7 +454,7 @@ class AddUnitsSerializer(serializers.Serializer):
                 holding.current_price = holding.avg_buy_price
 
         # Recalculate unrealized P&L
-        holding.unrealized_pnl = float(holding.quantity * holding.current_price) - float(holding.quantity * holding.avg_buy_price)
+        holding.unrealized_pnl = (holding.quantity * holding.current_price) - (holding.quantity * holding.avg_buy_price)
         holding.save()
         return holding
 

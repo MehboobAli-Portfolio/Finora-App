@@ -58,23 +58,61 @@ def scan_receipt_view(request):
     results = reader.readtext(image_bytes, detail=0)
     raw_text = " ".join(results).lower()
 
-    amounts = re.findall(r'\$?\s?(\d+\.\d{2})', raw_text)
-    max_amount = 0.0
-    for amt in amounts:
-        try:
-            val = float(amt)
-            if val > max_amount:
-                max_amount = val
-        except ValueError:
-            pass
+    # ── Multi-currency amount extraction ──────────────────────────────
+    # Matches: $100.50, Rs 1500, Rs.1500, PKR 25000, ₹500, 1,500.00,
+    # and plain large numbers like 25000 (common in PKR receipts)
+    amount_patterns = [
+        r'(?:rs\.?|pkr|₹|\$|inr|aed|sar)\s*([\d,]+(?:\.\d{1,2})?)',  # Currency prefix
+        r'([\d,]+\.\d{2})',                                            # Decimal amounts
+        r'total\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)',                   # "Total: 1500"
+        r'amount\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)',                  # "Amount: 1500"
+        r'grand\s*total\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)',           # "Grand Total"
+    ]
 
+    max_amount = 0.0
+    for pattern in amount_patterns:
+        matches = re.findall(pattern, raw_text)
+        for amt_str in matches:
+            try:
+                val = float(amt_str.replace(',', ''))
+                if val > max_amount:
+                    max_amount = val
+            except ValueError:
+                pass
+
+    # ── Category detection with local + international merchants ───────
     category = "other"
-    if any(w in raw_text for w in ['coffee', 'restaurant', 'cafe', 'food', 'mcdonald', 'starbucks', 'burger', 'pizza']):
+    food_keywords = [
+        'coffee', 'restaurant', 'cafe', 'food', 'mcdonald', 'starbucks',
+        'burger', 'pizza', 'kfc', 'subway', 'foodpanda', 'daraz food',
+        'student biryani', 'dominos', 'bakery', 'sweets', 'chai',
+        'dhaba', 'eatery', 'kitchen', 'dine', 'meal',
+    ]
+    transport_keywords = [
+        'uber', 'lyft', 'taxi', 'gas', 'shell', 'chevron', 'flight',
+        'careem', 'indrive', 'bykea', 'petrol', 'fuel', 'pso', 'caltex',
+        'airline', 'parking', 'toll', 'metro', 'bus',
+    ]
+    rent_keywords = ['rent', 'apartment', 'lease', 'housing', 'property']
+    shopping_keywords = [
+        'daraz', 'amazon', 'ali express', 'mall', 'store', 'mart',
+        'clothing', 'fashion', 'shoes', 'electronics',
+    ]
+    health_keywords = [
+        'pharmacy', 'hospital', 'clinic', 'doctor', 'medical',
+        'medicine', 'lab', 'diagnostic', 'dental',
+    ]
+
+    if any(w in raw_text for w in food_keywords):
         category = "food"
-    elif any(w in raw_text for w in ['uber', 'lyft', 'taxi', 'gas', 'shell', 'chevron', 'flight']):
+    elif any(w in raw_text for w in transport_keywords):
         category = "transport"
-    elif any(w in raw_text for w in ['rent', 'apartment', 'lease', 'housing']):
+    elif any(w in raw_text for w in rent_keywords):
         category = "rent"
+    elif any(w in raw_text for w in shopping_keywords):
+        category = "shopping"
+    elif any(w in raw_text for w in health_keywords):
+        category = "health"
 
     return Response({
         'amount': max_amount,

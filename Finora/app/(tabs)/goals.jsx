@@ -54,7 +54,7 @@ export default function GoalsScreen() {
       if (filter === 'completed') params.completed = 'true';
       else if (filter === 'active') params.completed = 'false';
       const res = await goalsAPI.list(params);
-      setGoals(res.data);
+      setGoals(res.data.results || res.data);
     } catch (e) {
       console.error(e);
     } finally {
