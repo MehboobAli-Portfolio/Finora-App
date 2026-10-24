@@ -1,24 +1,30 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Dynamically determine the backend API URL
+// Dynamically determine the backend API URL from environment config
 const getBaseUrl = () => {
-  // If running on web or connecting via localhost directly
+  // Read from Expo app config (app.json extra) for environment-specific URLs
+  const extra = Constants.expoConfig?.extra || Constants.manifest?.extra || {};
+  const configuredUrl = extra?.apiUrl;
+
+  if (configuredUrl) {
+    return configuredUrl.endsWith('/') ? configuredUrl : configuredUrl + '/';
+  }
+
+  // Development fallbacks (never use localhost in production builds)
   if (Platform.OS === 'web') return 'http://127.0.0.1:8000/api/';
-  
-  // Try to use the Expo packager IP automatically dynamically
+
   const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost || Constants.manifest2?.extra?.expoGo?.debuggerHost;
-  
+
   if (hostUri) {
     return `http://${hostUri.split(':')[0]}:8000/api/`;
   }
-  
-  // Fallback for Android Emulator
+
   if (Platform.OS === 'android') return 'http://10.0.2.2:8000/api/';
-  
-  // Default fallback (could be changed to production URL later)
+
+  // Safe default — requires explicit configuration for production
   return 'http://localhost:8000/api/';
 };
 
@@ -39,7 +45,6 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => Promise.reject(error)
@@ -66,13 +71,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Only log non-401 errors as errors; 401 is a normal token-expiry flow
-    if (error.response?.status !== 401) {
-      console.error(`[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.url} -> ${error.response?.status}`);
+    if (!error.response) {
+      return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // If already refreshing, queue this request
+    if (error.response.status !== 401) {
+      return Promise.reject(error);
+    }
+
+    if (error.response.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -93,10 +100,12 @@ api.interceptors.response.use(
         const response = await axios.post(`${BASE_URL}auth/refresh/`, {
           refresh: refreshToken,
         });
-        const { access } = response.data;
+        const { access, refresh } = response.data;
         await SecureStore.setItemAsync('access_token', access);
+        if (refresh) {
+          await SecureStore.setItemAsync('refresh_token', refresh);
+        }
 
-        // Process queued requests with new token
         processQueue(null, access);
 
         originalRequest.headers.Authorization = `Bearer ${access}`;
@@ -105,7 +114,6 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         await SecureStore.deleteItemAsync('access_token');
         await SecureStore.deleteItemAsync('refresh_token');
-        await SecureStore.deleteItemAsync('user_data');
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -124,6 +132,9 @@ export const authAPI = {
   getDashboard: () => api.get('auth/dashboard/'),
   getDashboardInsight: () => api.get('ai/insight/'),
   chat: (data) => api.post('ai/chat/', data),
+  passwordResetRequest: (data) => api.post('auth/password-reset/', data),
+  passwordResetConfirm: (data) => api.post('auth/password-reset/confirm/', data),
+  logout: (data) => api.post('auth/logout/', data),
 };
 
 // Expenses

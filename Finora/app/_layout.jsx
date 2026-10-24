@@ -1,12 +1,19 @@
-import { Stack } from 'expo-router';
+﻿import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ActivityIndicator, View } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../services/queryClient';
+import { useEffect } from 'react';
 
 function RootLayoutNav() {
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/');
+    }
+  }, [user, loading]);
 
   if (loading) {
     return (
@@ -21,7 +28,8 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="register" options={{ headerShown: false }} />
-      
+      <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="add-expense" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="add-goal" options={{ presentation: 'modal', headerShown: false }} />

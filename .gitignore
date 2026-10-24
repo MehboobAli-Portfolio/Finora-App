@@ -1,4 +1,4 @@
-node_modules/
+﻿node_modules/
 .expo/
 npm-debug.log
 yarn-error.log
@@ -11,6 +11,8 @@ __pycache__/
 # Django
 db.sqlite3
 db.sqlite3-journal
+finora-backend/db.sqlite3
+finora-backend/db.sqlite3-journal
 
 # Environments
 .env
@@ -37,3 +39,15 @@ finora-backend/output.txt
 finora-backend/test_auth.txt
 finora-backend/test_create.txt
 finora-backend/test_jwt.txt
+finora-backend/_audit_db.py
+finora-backend/check_active.py
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ChromaDB vector database (AI knowledge base - do not commit)
+finora-backend/ai_coach/chroma_db/

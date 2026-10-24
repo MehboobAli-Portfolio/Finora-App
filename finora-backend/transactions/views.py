@@ -1,4 +1,4 @@
-from rest_framework import generics, filters
+﻿from rest_framework import generics, filters
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -10,9 +10,38 @@ from datetime import timedelta
 from .models import Transaction
 from .serializers import TransactionSerializer
 import re
+import os
 
 READER = None
 _OCR_UNAVAILABLE = False
+
+# Allowed file types for receipt uploads
+ALLOWED_RECEIPT_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
+MAX_RECEIPT_SIZE_MB = 5
+MAX_RECEIPT_SIZE_BYTES = MAX_RECEIPT_SIZE_MB * 1024 * 1024
+
+
+def _validate_receipt_file(file_obj):
+    """Validate uploaded receipt file type and size."""
+    if not file_obj:
+        return 'No receipt file provided'
+    
+    # Check file extension
+    ext = os.path.splitext(file_obj.name)[1].lower()
+    if ext not in ALLOWED_RECEIPT_EXTENSIONS:
+        return f'Invalid file type. Allowed: {", ".join(sorted(ALLOWED_RECEIPT_EXTENSIONS))}'
+    
+    # Check file size
+    if file_obj.size > MAX_RECEIPT_SIZE_BYTES:
+        return f'File too large. Maximum size: {MAX_RECEIPT_SIZE_MB}MB'
+    
+    # Check MIME type
+    content_type = getattr(file_obj, 'content_type', '') or ''
+    allowed_mimes = {'image/jpeg', 'image/png', 'application/pdf'}
+    if content_type and content_type not in allowed_mimes:
+        return f'Invalid MIME type: {content_type}'
+    
+    return None
 
 
 def _get_receipt_reader():
@@ -27,7 +56,7 @@ def _get_receipt_reader():
             _OCR_UNAVAILABLE = True
             return None
         try:
-            READER = easyocr.Reader(['en'])
+            READER = easyocr.Reader(['en'], verbose=False)
         except Exception:
             _OCR_UNAVAILABLE = True
             return None
@@ -51,8 +80,9 @@ def scan_receipt_view(request):
         )
 
     file_obj = request.FILES.get('receipt')
-    if not file_obj:
-        return Response({'error': 'No receipt image provided'}, status=400)
+    validation_error = _validate_receipt_file(file_obj)
+    if validation_error:
+        return Response({'error': validation_error}, status=400)
 
     image_bytes = file_obj.read()
     results = reader.readtext(image_bytes, detail=0)

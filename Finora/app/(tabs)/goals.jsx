@@ -51,8 +51,8 @@ export default function GoalsScreen() {
   const loadGoals = async () => {
     try {
       const params = {};
-      if (filter === 'completed') params.completed = 'true';
-      else if (filter === 'active') params.completed = 'false';
+      if (filter === 'completed') params.status = 'completed';
+      else if (filter === 'active') params.status = 'active';
       const res = await goalsAPI.list(params);
       setGoals(res.data.results || res.data);
     } catch (e) {

@@ -1,7 +1,10 @@
-from rest_framework.decorators import api_view, permission_classes
+﻿from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status, generics
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .salary_logic import analyse_affordability
 from .models import SalaryProfile, SalarySnapshot
@@ -45,10 +48,10 @@ def analyse_view(request):
             currency=data.get('currency', 'PKR'),
         )
         
-        # 2. Record Insight for User Analytics
+        # 3. Record Insight for User Analytics
         SalarySnapshot.objects.create(
             user=request.user,
-            salary_usd=result.get('monthly_cost', 0), # Store analyzed cost for trends
+            salary_usd=result.get('monthly_cost', 0),
             salary_pkr=float(data.get('amount', 0)),
             global_pctile=0,
             country_pctile=0,
@@ -58,10 +61,10 @@ def analyse_view(request):
 
         return Response(result, status=status.HTTP_200_OK)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        # Log detailed error server-side only; return generic message to client
+        logger.exception('Salary analysis failed: %s', str(e))
         return Response(
-            {'error': f'Analysis Engine Failure: {str(e)}'},
+            {'error': 'Analysis failed. Please try again.'},
             status=status.HTTP_400_BAD_REQUEST
         )
 

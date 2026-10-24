@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   Alert, ActivityIndicator, Keyboard, TouchableWithoutFeedback
@@ -71,8 +71,7 @@ export default function LoginScreen() {
           </LinearGradient>
 
           {/* Floating Premium Card */}
-          <View style={{backgroundColor: '#FFFFFF',marginHorizontal: 20,marginTop: -40,borderRadius: 24,padding: 24,paddingTop: 32,shadowColor: '#1E3A8A',shadowOffset: {width: 0,height: 10},shadowOpacity: 0.08,shadowRadius: 24,elevation: 8,borderWidth: 1,borderColor: '#F1F5F9'}}>
-            
+          <View style={{backgroundColor: '#FFFFFF',marginHorizontal: 20,marginTop: -40,borderRadius: 24,padding: 24,paddingTop: 40,shadowColor: '#000',shadowOffset: {width: 0,height: 16},shadowOpacity: 0.15,shadowRadius: 32,elevation: 20}}>
             <View style={{marginBottom: 20}}>
               <Text style={{fontSize: 13,fontWeight: '700',color: '#475569',marginBottom: 8,textTransform: 'uppercase',letterSpacing: 0.5}}>Email Address</Text>
               <View style={{flexDirection: 'row',alignItems: 'center',backgroundColor: '#F8FAFC',borderRadius: 16,borderWidth: 1.5,borderColor: '#E2E8F0',paddingHorizontal: 16,height: 56}}>
@@ -111,7 +110,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity 
               style={{alignSelf: 'flex-end',marginBottom: 24}}
-              onPress={() => Alert.alert('Coming Soon', 'Password reset functionality will be available in a future update.')}
+              onPress={() => router.push('/forgot-password')}
             >
               <Text style={{color: '#2563EB',fontWeight: '600',fontSize: 14}}>Forgot password?</Text>
             </TouchableOpacity>

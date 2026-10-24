@@ -100,36 +100,70 @@ function FieldPicker({ label, value, options = [], onChange, icon, placeholder, 
                   <Ionicons name="search" size={18} color={C.muted} />
                   <TextInput
                     style={styles.modalSearchInput}
-                    placeholder={`Search ${label}...`}
+                    placeholder={`Search or type ${label}...`}
                     value={search}
                     onChangeText={setSearch}
                     autoFocus={true}
                   />
                 </View>
 
-                <FlatList
-                  data={filtered}
-                  keyExtractor={(item, index) => `${item}-${index}`}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[styles.modalItem, value === item && { backgroundColor: '#F1F5F9' }]}
-                      onPress={() => {
-                        onChange(item);
-                        setModalVisible(false);
-                        setSearch('');
-                      }}
-                    >
-                      <Text style={[styles.modalItemText, value === item && { color: C.primary, fontWeight: '700' }]}>
-                        {item}
-                      </Text>
-                      {value === item && <Ionicons name="checkmark-circle" size={20} color={C.primary} />}
-                    </TouchableOpacity>
-                  )}
-                  style={{ maxHeight: SH * 0.5 }}
-                  showsVerticalScrollIndicator={true}
-                  indicatorStyle="black"
-                  keyboardShouldPersistTaps="handled"
-                />
+                {search.trim().length > 0 && !options.some(opt => opt.toLowerCase() === search.trim().toLowerCase()) && (
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 12,
+                      backgroundColor: '#EFF6FF',
+                      borderRadius: 12,
+                      marginBottom: 12,
+                      gap: 8,
+                      borderWidth: 1,
+                      borderColor: '#BFDBFE'
+                    }}
+                    onPress={() => {
+                      onChange(search.trim());
+                      setModalVisible(false);
+                      setSearch('');
+                    }}
+                  >
+                    <Ionicons name="add-circle" size={20} color={C.primary} />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: C.primary, flex: 1 }}>
+                      Use "{search.trim()}"
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {filtered.length === 0 && search.trim().length === 0 ? (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <Text style={{ color: C.muted, fontSize: 13, textAlign: 'center' }}>
+                      Type above to set your {label} directly.
+                    </Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={filtered}
+                    keyExtractor={(item, index) => `${item}-${index}`}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[styles.modalItem, value === item && { backgroundColor: '#F1F5F9' }]}
+                        onPress={() => {
+                          onChange(item);
+                          setModalVisible(false);
+                          setSearch('');
+                        }}
+                      >
+                        <Text style={[styles.modalItemText, value === item && { color: C.primary, fontWeight: '700' }]}>
+                          {item}
+                        </Text>
+                        {value === item && <Ionicons name="checkmark-circle" size={20} color={C.primary} />}
+                      </TouchableOpacity>
+                    )}
+                    style={{ maxHeight: SH * 0.5 }}
+                    showsVerticalScrollIndicator={true}
+                    indicatorStyle="black"
+                    keyboardShouldPersistTaps="handled"
+                  />
+                )}
               </View>
             </TouchableWithoutFeedback>
           </View>

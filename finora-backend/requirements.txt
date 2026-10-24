@@ -1,4 +1,4 @@
-django>=6.0.1
+﻿django>=6.0.1
 djangorestframework>=3.16.1
 djangorestframework-simplejwt>=5.5.1
 django-cors-headers>=4.9.0
@@ -17,4 +17,5 @@ requests>=2.31.0
 # RAG Knowledge Base (local, no API keys)
 sentence-transformers>=2.2.0
 chromadb>=0.4.0
-
+# Rate limiting
+django-ratelimit>=6.1.0

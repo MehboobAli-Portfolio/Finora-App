@@ -1,7 +1,10 @@
-from rest_framework.decorators import api_view, permission_classes
+﻿from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+import logging
+
+logger = logging.getLogger(__name__)
 
 from django.utils import timezone
 from django.db.models import Sum, Case, When, DecimalField, Value
@@ -22,18 +25,11 @@ def _get_month_start():
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
-# Maximum approximate character budget for chat history context
 _CHAT_HISTORY_CHAR_CAP = 4000
 
 
 def _build_ai_engine(user, include_investments=False, include_categories=False, include_recent=False):
-    """
-    Helper: gather financial context for a user and return a loaded FinoraAI instance.
-    Uses a single Case/When aggregate query instead of multiple DB round-trips.
-    """
     month_start = _get_month_start()
-
-    # ── Single query: monthly income + expenses via Case/When ─────────
     aggregates = Transaction.objects.filter(user=user).aggregate(
         monthly_expenses=Sum(
             Case(
@@ -50,12 +46,10 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
     )
     expense_only = aggregates['monthly_expenses'] or 0
     total_income = aggregates['monthly_income'] or 0
-
-    balance       = float(total_income) - float(expense_only)
-    goals_count   = Goal.objects.filter(user=user).count()
-    completed     = Goal.objects.filter(user=user, status='completed').count()
-    active_goals  = list(Goal.objects.filter(user=user, status='active'))
-
+    balance = float(total_income) - float(expense_only)
+    goals_count = Goal.objects.filter(user=user).count()
+    completed = Goal.objects.filter(user=user, status='completed').count()
+    active_goals = list(Goal.objects.filter(user=user, status='active'))
     spending_by_category = []
     if include_categories:
         rows = (
@@ -64,20 +58,15 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
             .annotate(total=Sum('amount'))
             .order_by('-total')[:5]
         )
-        spending_by_category = [
-            {'category': r['category'], 'total': float(r['total'] or 0)} for r in rows
-        ]
-
+        spending_by_category = [{'category': r['category'], 'total': float(r['total'] or 0)} for r in rows]
     recent_transactions = []
     if include_recent:
         qs = Transaction.objects.filter(user=user).order_by('-date')[:8]
         recent_transactions = TransactionSerializer(qs, many=True).data
-
     investments = []
     if include_investments:
         inv_qs = Holding.objects.filter(user=user).order_by('-last_updated')[:10]
         investments = HoldingSerializer(inv_qs, many=True).data
-
     return FinoraAI(
         user=user,
         balance=balance,
@@ -93,53 +82,64 @@ def _build_ai_engine(user, include_investments=False, include_categories=False, 
     )
 
 
-def _cap_chat_history(messages, char_cap=_CHAT_HISTORY_CHAR_CAP):
-    """Trim older messages from chat history so total characters stay under cap."""
+def _cap_chat_history(message_history, char_cap=_CHAT_HISTORY_CHAR_CAP):
+    total = 0
     capped = []
-    total_chars = 0
-    # Walk from newest to oldest, keep messages until we hit the cap
-    for msg in reversed(messages):
-        content_len = len(msg.get('content', ''))
-        if total_chars + content_len > char_cap and capped:
+    for m in reversed(message_history):
+        entry_len = len(m.get('content', '')) + 50
+        if total + entry_len > char_cap:
             break
-        capped.append(msg)
-        total_chars += content_len
-    capped.reverse()
+        capped.insert(0, m)
+        total += entry_len
     return capped
 
-
-# ── Views ─────────────────────────────────────────────────────────────────
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def insight_view(request):
-    """
-    GET /api/ai/insight/
-    Returns a single AI-generated daily financial suggestion for the dashboard.
-    Lightweight — no recent transactions or investments loaded.
-    """
     try:
-        engine = _build_ai_engine(request.user)
-        return Response({'ai_suggestion': engine.generate_daily_suggestion()})
+        engine = _build_ai_engine(
+            request.user,
+            include_investments=True,
+            include_categories=True,
+            include_recent=True,
+        )
+        insights = []
+        if engine.balance < 0:
+            insights.append('Your balance is negative. Focus on reducing expenses.')
+        elif engine.balance > 0:
+            insights.append(f'Your current balance is {engine.balance:.2f}.')
+        if engine.budget > 0:
+            pct = (engine.expenses / engine.budget) * 100 if engine.budget > 0 else 0
+            if pct > 100:
+                insights.append(f'You have exceeded your monthly budget by {pct - 100:.1f}%')
+            elif pct > 80:
+                insights.append(f'You have used {pct:.1f}% of your monthly budget.')
+            else:
+                insights.append(f'You are within budget ({pct:.1f}% used).')
+        if engine.goals_count > 0:
+            insights.append(f'You have {engine.goals_count} active goals, {engine.completed_goals} completed.')
+        if not insights:
+            insights.append('Keep tracking your finances to get personalized insights.')
+        return Response({
+            'insights': insights,
+            'balance': engine.balance,
+            'monthly_income': engine.income,
+            'monthly_expenses': engine.expenses,
+            'budget': engine.budget,
+        })
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('AI insight failed: %s', str(e))
+        return Response({'error': 'Insight service temporarily unavailable. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def chat_view(request):
-    """
-    POST /api/ai/chat/
-    Body: { "message": "...", "conversation_id": "optional-uuid" }
-    Returns: { "reply": "...", "intent": "...", "conversation_id": "..." }
-    Full context: categories, recent transactions, investments.
-    """
     message_text = request.data.get('message', '').strip()
     if not message_text:
         return Response({'error': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
-
     conversation_id = request.data.get('conversation_id')
-    
     if conversation_id:
         try:
             conversation = AIConversation.objects.get(id=conversation_id, user=request.user)
@@ -148,25 +148,20 @@ def chat_view(request):
     else:
         conversation = AIConversation.objects.create(
             user=request.user,
-            title=message_text[:50] + "..." if len(message_text) > 50 else message_text
+            title=message_text[:50] + '...' if len(message_text) > 50 else message_text
         )
-
-    # Save User Message
     user_msg = AIMessage.objects.create(
         conversation=conversation,
         user=request.user,
         role='user',
         content=message_text
     )
-
-    # Fetch last 15 messages for context, then cap by character budget
     recent_messages = conversation.messages.order_by('-created_at')[:15]
     chat_history = [
-        {"role": m.role, "content": m.content, "intent": m.intent}
+        {'role': m.role, 'content': m.content, 'intent': m.intent}
         for m in reversed(recent_messages)
     ]
     chat_history = _cap_chat_history(chat_history)
-
     try:
         engine = _build_ai_engine(
             request.user,
@@ -174,12 +169,8 @@ def chat_view(request):
             include_categories=True,
             include_recent=True,
         )
-
-        # Use SmartRouter: Intent → RAG → Fallback
         router = SmartRouter(engine)
         reply, intent, entities = router.process_message(message_text, chat_history=chat_history)
-        
-        # Save Assistant Reply
         AIMessage.objects.create(
             conversation=conversation,
             user=request.user,
@@ -188,7 +179,6 @@ def chat_view(request):
             intent=intent,
             entities=entities
         )
-        
         return Response({
             'reply': reply,
             'intent': intent,
@@ -196,18 +186,13 @@ def chat_view(request):
             'conversation_id': conversation.id
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('AI chat failed: %s', str(e))
+        return Response({'error': 'AI service temporarily unavailable. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def chat_history_view(request):
-    """
-    GET /api/ai/chat/history/
-    Returns all user conversations with their messages.
-    """
     conversations = AIConversation.objects.filter(user=request.user).order_by('-last_active')
     data = []
     for conv in conversations:

@@ -63,7 +63,12 @@ export function AuthProvider({ children }) {
       await SecureStore.setItemAsync('user_data', JSON.stringify(res.data));
       setUser(res.data);
     } catch (e) {
-      console.error('Refresh user failed:', e);
+      // If refresh fails (token expired/invalid), clear session and redirect via layout
+      console.warn('Session validation failed, logging out:', e?.message);
+      await SecureStore.deleteItemAsync('access_token');
+      await SecureStore.deleteItemAsync('refresh_token');
+      await SecureStore.deleteItemAsync('user_data');
+      setUser(null);
     }
   };
 
