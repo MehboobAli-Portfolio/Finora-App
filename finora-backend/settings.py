@@ -22,13 +22,13 @@ if not SECRET_KEY or SECRET_KEY == 'your-super-secret-key-change-this-in-product
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 # SECURITY WARNING: define allowed hosts explicitly in production
-_allowed_hosts = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+_allowed_hosts = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,192.168.1.158')
 ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(',') if h.strip()]
 
-_csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://127.0.0.1:8000')
+_csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://127.0.0.1:8000,http://192.168.1.158:8000')
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]
 
-_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8081,http://127.0.0.1:8081')
+_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8081,http://127.0.0.1:8081,http://192.168.1.158:8081')
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
@@ -150,18 +150,53 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
-# Cache Settings (Redis with fallback)
+# Cache Settings (Redis when available, in-memory fallback otherwise)
+# The import check alone is not enough — django_redis may be installed but
+# Redis may not be running.  Probe the connection before committing to Redis.
+def _redis_available(url: str) -> bool:
+    """Return True only if Redis is reachable at *url* right now."""
+    try:
+        import redis as _redis
+        from urllib.parse import urlparse
+        p = urlparse(url)
+        host = p.hostname or '127.0.0.1'
+        port = p.port or 6379
+        db   = int(p.path.lstrip('/') or 0)
+        client = _redis.StrictRedis(host=host, port=port, db=db,
+                                    socket_connect_timeout=1,
+                                    socket_timeout=1)
+        client.ping()
+        return True
+    except Exception:
+        return False
+
+_REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
+
 try:
-    import django_redis  # noqa: F401
-    CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            },
+    import django_redis  # noqa: F401  — check package is installed
+    if _redis_available(_REDIS_URL):
+        CACHES = {
+            'default': {
+                'BACKEND': 'django_redis.cache.RedisCache',
+                'LOCATION': _REDIS_URL,
+                'OPTIONS': {
+                    'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                },
+            }
         }
-    }
+    else:
+        import warnings
+        warnings.warn(
+            f'Redis is not reachable at {_REDIS_URL}. '
+            'Falling back to in-memory cache. '
+            'Rate-limiting will not persist across worker processes.',
+            RuntimeWarning,
+        )
+        CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            }
+        }
 except ImportError:
     CACHES = {
         'default': {
@@ -170,7 +205,7 @@ except ImportError:
     }
 
 # Celery Settings
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
+CELERY_BROKER_URL = _REDIS_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 

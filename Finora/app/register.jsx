@@ -45,9 +45,9 @@ export default function RegisterScreen() {
       return;
     }
 
-    // 4. Password strength hint
-    if (password.length < 8) {
-      Alert.alert('Weak Password', 'For your security, please use a password with at least 8 characters.');
+    // 4. Password strength — must match backend minimum (12 chars)
+    if (password.length < 12) {
+      Alert.alert('Weak Password', 'For your security, please use a password with at least 12 characters.');
       return;
     }
 

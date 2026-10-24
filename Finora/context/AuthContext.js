@@ -51,10 +51,21 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await SecureStore.deleteItemAsync('access_token');
-    await SecureStore.deleteItemAsync('refresh_token');
-    await SecureStore.deleteItemAsync('user_data');
-    setUser(null);
+    try {
+      // Blacklist the refresh token on the server before clearing local storage
+      const refreshToken = await SecureStore.getItemAsync('refresh_token');
+      if (refreshToken) {
+        await authAPI.logout({ refresh: refreshToken });
+      }
+    } catch (e) {
+      // Server-side blacklist failure should not block local logout
+      console.warn('Server logout failed (token may already be expired):', e?.message);
+    } finally {
+      await SecureStore.deleteItemAsync('access_token');
+      await SecureStore.deleteItemAsync('refresh_token');
+      await SecureStore.deleteItemAsync('user_data');
+      setUser(null);
+    }
   };
 
   const refreshUser = async () => {

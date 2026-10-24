@@ -199,10 +199,12 @@ export default function ForgotPasswordScreen() {
                   </TouchableOpacity>
                 </>
               ) : (
-                <Text style={{ fontSize: 15, color: '#64748B', fontWeight: '500' }}>Need a new link? </Text>
-                <TouchableOpacity onPress={() => setStep('request')}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#2563EB' }}>Request again</Text>
-                </TouchableOpacity>
+                <>
+                  <Text style={{ fontSize: 15, color: '#64748B', fontWeight: '500' }}>Need a new link? </Text>
+                  <TouchableOpacity onPress={() => setStep('request')}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#2563EB' }}>Request again</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           </View>
