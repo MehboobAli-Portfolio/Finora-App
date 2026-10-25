@@ -212,9 +212,15 @@ CELERY_TASK_SERIALIZER = 'json'
 try:
     from celery.schedules import crontab
     CELERY_BEAT_SCHEDULE = {
+        # Refresh investment price history (existing)
         'update_prices_every_15_mins': {
             'task': 'investments.tasks.update_prices',
             'schedule': crontab(minute='*/15'),
+        },
+        # Pre-warm market data cache for AI Coach so chat is instant
+        'refresh_market_data_every_10_mins': {
+            'task': 'ai_coach.tasks.refresh_market_data',
+            'schedule': crontab(minute='*/10'),
         },
     }
 except ImportError:

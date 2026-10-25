@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Platform, ActivityIndicator, Keyboard, StyleSheet
+  Platform, Keyboard, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,61 +10,21 @@ import { router } from 'expo-router';
 import { aiAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
-// Suggested quick prompts for instant high-value queries
+// ── Quick-prompt chips shown on a new/empty session ──────────────────────────
 const QUICK_PROMPTS = [
-  { id: '1', label: '💰 Check My Balance', query: 'What is my current net balance?' },
-  { id: '2', label: '📊 Spending Breakdown', query: 'Show my spending breakdown this month' },
-  { id: '3', label: '🎯 Goals Progress', query: 'How are my savings goals progressing?' },
-  { id: '4', label: '💡 50/30/20 Rule', query: 'What is the 50/30/20 budgeting rule?' },
-  { id: '5', label: '📈 Live Market Intel', query: 'How is the market doing today?' },
+  { id: '1', label: '💰 Check My Balance',    query: 'What is my current net balance?' },
+  { id: '2', label: '📊 Spending Breakdown',  query: 'Show my spending breakdown this month' },
+  { id: '3', label: '🎯 Goals Progress',      query: 'How are my savings goals progressing?' },
+  { id: '4', label: '💡 50/30/20 Rule',       query: 'What is the 50/30/20 budgeting rule?' },
+  { id: '5', label: '📈 Live Market Intel',   query: 'How is the market doing today?' },
   { id: '6', label: '🏖️ Retirement Savings', query: 'How much should I save for retirement?' },
-  { id: '7', label: '💳 Debt Strategies', query: 'What is the avalanche vs snowball debt method?' },
+  { id: '7', label: '💳 Debt Strategies',     query: 'What is the avalanche vs snowball debt method?' },
 ];
 
-// Helper to render stylized text with bullet points and bold headers
-function FormattedMessage({ text, role }) {
-  if (role === 'user') {
-    return <Text style={styles.userText}>{text}</Text>;
-  }
+// ── Inline markdown renderer ──────────────────────────────────────────────────
 
-  // Split into lines for structured layout
-  const lines = text.split('\n');
-
-  return (
-    <View style={styles.botTextContainer}>
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          return <View key={idx} style={{ height: 6 }} />;
-        }
-
-        // Bullet point detection (-, *, •, or emoji bullets)
-        const isBullet = /^[-*•]\s+/.test(trimmed) || /^[💰🎯📈📊💳🏠🏖️💡•✅⚠️]\s*/.test(trimmed);
-        
-        // Header detection (ends with colon or starts with title)
-        const isHeader = !isBullet && (trimmed.endsWith(':') || trimmed.startsWith('Live Market') || trimmed.startsWith('Health Score'));
-
-        return (
-          <View key={idx} style={[styles.lineRow, isBullet && styles.bulletRow]}>
-            {isBullet && !/^[💰🎯📈📊💳🏠🏖️💡•✅⚠️]/.test(trimmed) && (
-              <View style={styles.bulletDot} />
-            )}
-            <Text style={[
-              styles.botText,
-              isHeader && styles.headerText,
-              isBullet && styles.bulletText
-            ]}>
-              {renderFormattedRuns(trimmed.replace(/^[-*•]\s+/, ''))}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-// Parses **bold** segments inside a line
-function renderFormattedRuns(str) {
+/** Parses **bold** segments inside a single line. */
+function renderBoldRuns(str) {
   const parts = str.split(/(\*\*.*?\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -78,22 +38,73 @@ function renderFormattedRuns(str) {
   });
 }
 
-// Action buttons suggested by context
+/** Renders a bot message with bullets, headers, and bold text. */
+function FormattedMessage({ text, role, isStreaming }) {
+  if (role === 'user') {
+    return <Text style={styles.userText}>{text}</Text>;
+  }
+
+  const lines = text.split('\n');
+
+  return (
+    <View style={styles.botTextContainer}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <View key={idx} style={{ height: 6 }} />;
+
+        const isBullet =
+          /^[-*•]\s+/.test(trimmed) ||
+          /^[💰🎯📈📊💳🏠🏖️💡•✅⚠️]\s*/.test(trimmed);
+        const isHeader =
+          !isBullet &&
+          (trimmed.endsWith(':') ||
+            trimmed.startsWith('Live Market') ||
+            trimmed.startsWith('Health Score'));
+
+        return (
+          <View key={idx} style={[styles.lineRow, isBullet && styles.bulletRow]}>
+            {isBullet && !/^[💰🎯📈📊💳🏠🏖️💡•✅⚠️]/.test(trimmed) && (
+              <View style={styles.bulletDot} />
+            )}
+            <Text
+              style={[
+                styles.botText,
+                isHeader && styles.headerText,
+                isBullet && styles.bulletText,
+              ]}
+            >
+              {renderBoldRuns(trimmed.replace(/^[-*•]\s+/, ''))}
+            </Text>
+          </View>
+        );
+      })}
+      {/* Blinking cursor while streaming */}
+      {isStreaming && <Text style={styles.cursor}>▋</Text>}
+    </View>
+  );
+}
+
+// ── Context action buttons below bot messages ─────────────────────────────────
 function ContextActions({ intent, text }) {
   const lower = (text || '').toLowerCase();
   const actions = [];
 
   if (intent === 'check_balance' || lower.includes('balance') || lower.includes('spending')) {
-    actions.push({ label: 'View Expenses', icon: 'receipt-outline', route: '/(tabs)/expenses' });
-    actions.push({ label: '+ Add Expense', icon: 'add-circle-outline', route: '/add-expense' });
+    actions.push({ label: 'View Expenses',  icon: 'receipt-outline',      route: '/(tabs)/expenses' });
+    actions.push({ label: '+ Add Expense',  icon: 'add-circle-outline',   route: '/add-expense' });
   } else if (intent === 'goals_status' || lower.includes('goal')) {
-    actions.push({ label: 'View Goals', icon: 'flag-outline', route: '/(tabs)/goals' });
-    actions.push({ label: '+ New Goal', icon: 'add-circle-outline', route: '/add-goal' });
-  } else if (intent === 'market_status' || lower.includes('stock') || lower.includes('portfolio') || lower.includes('market')) {
-    actions.push({ label: 'View Portfolio', icon: 'trending-up-outline', route: '/(tabs)/invest' });
-    actions.push({ label: '+ Add Holding', icon: 'add-circle-outline', route: '/add-investment' });
+    actions.push({ label: 'View Goals',     icon: 'flag-outline',         route: '/(tabs)/goals' });
+    actions.push({ label: '+ New Goal',     icon: 'add-circle-outline',   route: '/add-goal' });
+  } else if (
+    intent === 'market_status' ||
+    lower.includes('stock') ||
+    lower.includes('portfolio') ||
+    lower.includes('market')
+  ) {
+    actions.push({ label: 'View Portfolio', icon: 'trending-up-outline',  route: '/(tabs)/invest' });
+    actions.push({ label: '+ Add Holding',  icon: 'add-circle-outline',   route: '/add-investment' });
   } else if (lower.includes('salary') || lower.includes('cost of living')) {
-    actions.push({ label: 'Salary Reality', icon: 'calculator-outline', route: '/(tabs)/salary-reality' });
+    actions.push({ label: 'Salary Reality', icon: 'calculator-outline',   route: '/(tabs)/salary-reality' });
   }
 
   if (actions.length === 0) return null;
@@ -115,104 +126,138 @@ function ContextActions({ intent, text }) {
   );
 }
 
+// ── Main screen ───────────────────────────────────────────────────────────────
 export default function AiScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  
-  const initialGreeting = `Hello ${user?.full_name || user?.username || 'there'}! 👋 I am your Finora Neural Coach.\n\nI can analyze your spending ledger, forecast goal timelines, explain market trends, or answer any financial literacy questions. How can I help you today?`;
 
-  const [messages, setMessages] = useState([{
-    id: '1',
-    role: 'bot',
-    text: initialGreeting,
-    intent: 'welcome',
-  }]);
-  const [inputText, setInputText] = useState('');
-  const [loading, setLoading] = useState(false);
+  const greeting = `Hello ${user?.full_name || user?.username || 'there'}! 👋 I am your Finora Neural Coach.\n\nI can analyse your spending, forecast goal timelines, explain market trends, or answer any finance question. How can I help you today?`;
+
+  const [messages, setMessages] = useState([
+    { id: '1', role: 'bot', text: greeting, intent: 'welcome' },
+  ]);
+  const [inputText, setInputText]           = useState('');
+  const [isStreaming, setIsStreaming]        = useState(false);  // true while SSE is open
+  const [streamingMsgId, setStreamingMsgId] = useState(null);   // id of the bubble being typed
   const [conversationId, setConversationId] = useState(null);
-  const scrollViewRef = useRef();
-
-  // Dynamic keyboard handling
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
+  const scrollViewRef  = useRef(null);
+  const abortStreamRef = useRef(null);   // holds the abort() fn for the active stream
+
+  // ── Keyboard height tracking ──────────────────────────────────────────────
   useEffect(() => {
-    const showSub = Keyboard.addListener(
+    const show = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => setKeyboardHeight(e.endCoordinates.height)
+      (e) => setKeyboardHeight(e.endCoordinates.height),
     );
-    const hideSub = Keyboard.addListener(
+    const hide = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardHeight(0)
+      () => setKeyboardHeight(0),
     );
+    // Abort any active stream when screen unmounts
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      show.remove();
+      hide.remove();
+      abortStreamRef.current?.();
     };
   }, []);
 
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
+  }, []);
+
+  // ── Main send handler ─────────────────────────────────────────────────────
   const handleSend = async (manualText = null) => {
-    const text = (manualText || inputText).trim();
-    if (!text || loading) return;
+    const text = (manualText ?? inputText).trim();
+    if (!text || isStreaming) return;
 
-    const userMsg = {
-      id: Date.now().toString(),
-      role: 'user',
-      text
-    };
+    Keyboard.dismiss();
 
-    setMessages(prev => [...prev, userMsg]);
+    // Add user bubble
+    const userMsgId = Date.now().toString();
+    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', text }]);
     setInputText('');
-    setLoading(true);
 
-    try {
-      const response = await aiAPI.chat(text, conversationId);
-      const data = response.data;
+    // Add an empty bot bubble that will be filled token-by-token
+    const botMsgId = (Date.now() + 1).toString();
+    setMessages((prev) => [...prev, { id: botMsgId, role: 'bot', text: '', intent: null }]);
+    setStreamingMsgId(botMsgId);
+    setIsStreaming(true);
+    scrollToBottom();
 
-      if (data.conversation_id && !conversationId) {
-        setConversationId(data.conversation_id);
-      }
+    // ── Stream ──────────────────────────────────────────────────────────
+    const abort = await aiAPI.chatStream(
+      text,
+      conversationId,
 
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        text: data.reply,
-        role: 'bot',
-        intent: data.intent
-      }]);
-    } catch (e) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 2).toString(),
-        text: "I encountered a momentary connection issue. Please verify the backend is running and try again.",
-        role: 'bot'
-      }]);
-    } finally {
-      setLoading(false);
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-    }
+      // onToken — append each word to the streaming bubble
+      (token) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === botMsgId ? { ...m, text: m.text + token } : m,
+          ),
+        );
+        scrollToBottom();
+      },
+
+      // onDone — attach metadata and close the stream
+      ({ intent, entities, conversation_id }) => {
+        if (conversation_id && !conversationId) {
+          setConversationId(conversation_id);
+        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === botMsgId ? { ...m, intent, entities } : m,
+          ),
+        );
+        setIsStreaming(false);
+        setStreamingMsgId(null);
+        scrollToBottom();
+      },
+
+      // onError — show error message in the bubble
+      (errMsg) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === botMsgId
+              ? {
+                  ...m,
+                  text: 'I encountered a connection issue. Please check the server is running and try again.',
+                }
+              : m,
+          ),
+        );
+        setIsStreaming(false);
+        setStreamingMsgId(null);
+      },
+    );
+
+    abortStreamRef.current = abort;
   };
 
+  // ── Reset conversation ────────────────────────────────────────────────────
   const handleResetChat = () => {
+    abortStreamRef.current?.();
+    setIsStreaming(false);
+    setStreamingMsgId(null);
     setConversationId(null);
-    setMessages([{
-      id: Date.now().toString(),
-      role: 'bot',
-      text: initialGreeting,
-      intent: 'welcome',
-    }]);
+    setMessages([
+      { id: Date.now().toString(), role: 'bot', text: greeting, intent: 'welcome' },
+    ]);
   };
 
   const isNewSession = messages.length <= 1;
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-      {/* HEADER */}
+      {/* ── Header ── */}
       <LinearGradient
         colors={['#1E3A8A', '#2563EB']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[
-          styles.header,
-          { paddingTop: Math.max(insets.top + 8, 36) }
-        ]}
+        style={[styles.header, { paddingTop: Math.max(insets.top + 8, 36) }]}
       >
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
@@ -222,8 +267,10 @@ export default function AiScreen() {
             <View>
               <Text style={styles.headerTitle}>Neural Coach</Text>
               <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>Active Intelligence</Text>
+                <View style={[styles.statusDot, isStreaming && styles.statusDotStreaming]} />
+                <Text style={styles.statusText}>
+                  {isStreaming ? 'Thinking…' : 'Active Intelligence'}
+                </Text>
               </View>
             </View>
           </View>
@@ -238,7 +285,7 @@ export default function AiScreen() {
         </View>
       </LinearGradient>
 
-      {/* QUICK SUGGESTIONS (Visible on empty/start) */}
+      {/* ── Quick suggestion chips (new session only) ── */}
       {isNewSession && (
         <View style={styles.suggestionsContainer}>
           <Text style={styles.suggestionsHeader}>Quick Insights</Text>
@@ -253,6 +300,7 @@ export default function AiScreen() {
                 style={styles.promptChip}
                 onPress={() => handleSend(prompt.query)}
                 activeOpacity={0.7}
+                disabled={isStreaming}
               >
                 <Text style={styles.promptChipText}>{prompt.label}</Text>
               </TouchableOpacity>
@@ -261,29 +309,20 @@ export default function AiScreen() {
         </View>
       )}
 
-      {/* CHAT MESSAGES */}
-      <View style={{ 
-        flex: 1, 
-        marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0 
-      }}>
+      {/* ── Chat messages ── */}
+      <View style={{ flex: 1, marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0 }}>
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ 
-            padding: 16, 
-            paddingBottom: insets.bottom + 90 
-          }}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 90 }}
+          onContentSizeChange={scrollToBottom}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           {messages.map((msg) => (
             <View
               key={msg.id}
-              style={[
-                styles.messageRow,
-                msg.role === 'user' ? styles.userRow : styles.botRow
-              ]}
+              style={[styles.messageRow, msg.role === 'user' ? styles.userRow : styles.botRow]}
             >
               {msg.role === 'bot' && (
                 <View style={styles.botMiniAvatar}>
@@ -293,56 +332,67 @@ export default function AiScreen() {
               <View
                 style={[
                   styles.messageBubble,
-                  msg.role === 'user' ? styles.userBubble : styles.botBubble
+                  msg.role === 'user' ? styles.userBubble : styles.botBubble,
                 ]}
               >
-                <FormattedMessage text={msg.text} role={msg.role} />
-                {msg.role === 'bot' && msg.intent && msg.intent !== 'welcome' && (
-                  <ContextActions intent={msg.intent} text={msg.text} />
+                {/* Empty streaming bubble shows a typing indicator */}
+                {msg.role === 'bot' && msg.text === '' && msg.id === streamingMsgId ? (
+                  <View style={styles.typingRow}>
+                    <ActivityIndicator size="small" color="#2563EB" />
+                    <Text style={styles.typingText}>Analysing…</Text>
+                  </View>
+                ) : (
+                  <FormattedMessage
+                    text={msg.text}
+                    role={msg.role}
+                    isStreaming={msg.id === streamingMsgId && isStreaming}
+                  />
                 )}
+                {/* Context action buttons — shown only when streaming is done */}
+                {msg.role === 'bot' &&
+                  msg.intent &&
+                  msg.intent !== 'welcome' &&
+                  msg.id !== streamingMsgId && (
+                    <ContextActions intent={msg.intent} text={msg.text} />
+                  )}
               </View>
             </View>
           ))}
-
-          {loading && (
-            <View style={[styles.messageRow, styles.botRow]}>
-              <View style={styles.botMiniAvatar}>
-                <Ionicons name="sparkles" size={14} color="#2563EB" />
-              </View>
-              <View style={[styles.messageBubble, styles.botBubble, styles.loadingBubble]}>
-                <ActivityIndicator size="small" color="#2563EB" />
-                <Text style={styles.loadingText}>Synthesizing financial telemetry...</Text>
-              </View>
-            </View>
-          )}
         </ScrollView>
 
-        {/* INPUT BAR */}
-        <View style={[
-          styles.inputContainer,
-          { paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 85 }
-        ]}>
+        {/* ── Input bar ── */}
+        <View
+          style={[
+            styles.inputContainer,
+            { paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 85 },
+          ]}
+        >
           <View style={styles.inputPill}>
             <TextInput
               style={styles.textInput}
-              placeholder="Ask anything about your money, goals, or market..."
+              placeholder="Ask anything about your money, goals, or market…"
               placeholderTextColor="#94A3B8"
               value={inputText}
               onChangeText={setInputText}
               onSubmitEditing={() => handleSend()}
               returnKeyType="send"
               multiline={false}
+              editable={!isStreaming}
             />
-            <TouchableOpacity 
-              onPress={() => handleSend()} 
-              disabled={loading || !inputText.trim()} 
+            <TouchableOpacity
+              onPress={() => handleSend()}
+              disabled={isStreaming || !inputText.trim()}
               style={[
                 styles.sendBtn,
-                { backgroundColor: inputText.trim() ? '#2563EB' : '#E2E8F0' }
+                { backgroundColor: !isStreaming && inputText.trim() ? '#2563EB' : '#E2E8F0' },
               ]}
               activeOpacity={0.8}
             >
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+              {isStreaming ? (
+                <ActivityIndicator size="small" color="#94A3B8" />
+              ) : (
+                <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -351,6 +401,7 @@ export default function AiScreen() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   header: {
     paddingBottom: 18,
@@ -403,6 +454,9 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: '#34D399',
+  },
+  statusDotStreaming: {
+    backgroundColor: '#FBBF24',  // amber while thinking
   },
   statusText: {
     fontSize: 12,
@@ -546,6 +600,22 @@ const styles = StyleSheet.create({
   bulletText: {
     color: '#1E293B',
   },
+  cursor: {
+    color: '#2563EB',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  typingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  typingText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
   actionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -570,16 +640,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#2563EB',
-  },
-  loadingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
   },
   inputContainer: {
     backgroundColor: '#FFFFFF',

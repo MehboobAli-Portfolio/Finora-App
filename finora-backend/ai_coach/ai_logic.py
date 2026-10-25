@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 import re
 import time
 
 from transactions.models import Transaction
+
+logger = logging.getLogger(__name__)
 
 # Intent routing: absolute confidence and top1-top2 margin (see plan).
 SKLEARN_MIN_CONF = 0.28
@@ -13,39 +16,61 @@ TORCH_MIN_MARGIN = 0.04
 
 _CATEGORY_LABELS = dict(Transaction.CATEGORY_CHOICES)
 
+# ── Market data ───────────────────────────────────────────────────────────────
+# Primary source: Django cache populated every 10 min by Celery task.
+# Fallback: in-process module-level cache (same behaviour as before).
+# Both paths are used so the system degrades gracefully without Redis/Celery.
 
-_MARKET_CACHE = None
-_MARKET_CACHE_TIME = 0
-_CACHE_EXPIRY = 300 # 5 minutes
+_MODULE_MARKET_CACHE: dict | None = None
+_MODULE_MARKET_CACHE_TIME: float = 0
+_MODULE_CACHE_EXPIRY: int = 300   # 5 minutes for in-process fallback
+
+MARKET_CACHE_KEY = 'finora_market_data'   # must match ai_coach/tasks.py
+
 
 def get_market_data():
-    global _MARKET_CACHE, _MARKET_CACHE_TIME
-    now = time.time()
-    
-    # Return cached data if valid
-    if _MARKET_CACHE and (now - _MARKET_CACHE_TIME < _CACHE_EXPIRY):
-        return _MARKET_CACHE
+    """
+    Return the latest market prices dict.
+    Tries Django cache first (populated by Celery), falls back to a direct
+    yfinance call with an in-process 5-minute TTL so we never block on Redis.
+    """
+    global _MODULE_MARKET_CACHE, _MODULE_MARKET_CACHE_TIME
 
+    # ── 1. Try Django cache (instant, pre-warmed by Celery task) ─────────
+    try:
+        from django.core.cache import cache as _django_cache
+        cached = _django_cache.get(MARKET_CACHE_KEY)
+        if cached:
+            return cached
+    except Exception:
+        pass  # Cache unavailable — fall through to yfinance
+
+    # ── 2. In-process fallback cache ─────────────────────────────────────
+    now = time.time()
+    if _MODULE_MARKET_CACHE and (now - _MODULE_MARKET_CACHE_TIME < _MODULE_CACHE_EXPIRY):
+        return _MODULE_MARKET_CACHE
+
+    # ── 3. Live yfinance call (only when both caches are cold/stale) ──────
     try:
         import yfinance as yf
-        # Use a smaller timeout for yfinance if possible, or just accept the background fetch
-        spy = yf.Ticker("SPY").fast_info
-        btc = yf.Ticker("BTC-USD").fast_info
-        qqq = yf.Ticker("QQQ").fast_info
-        gold = yf.Ticker("GC=F").fast_info
-        
+        spy  = yf.Ticker('SPY').fast_info
+        btc  = yf.Ticker('BTC-USD').fast_info
+        qqq  = yf.Ticker('QQQ').fast_info
+        gold = yf.Ticker('GC=F').fast_info
+
         data = {
-            "spy_price": spy.last_price,
-            "btc_price": btc.last_price,
-            "qqq_price": qqq.last_price,
-            "gold_price": gold.last_price,
+            'spy_price':  spy.last_price,
+            'btc_price':  btc.last_price,
+            'qqq_price':  qqq.last_price,
+            'gold_price': gold.last_price,
+            'fetched_at': now,
         }
-        
-        _MARKET_CACHE = data
-        _MARKET_CACHE_TIME = now
+        _MODULE_MARKET_CACHE = data
+        _MODULE_MARKET_CACHE_TIME = now
         return data
-    except Exception:
-        return _MARKET_CACHE # Return stale cache on failure rather than None if possible
+    except Exception as exc:
+        logger.warning('yfinance live fetch failed: %s', exc)
+        return _MODULE_MARKET_CACHE  # Return stale cache rather than None
 
 
 class FinoraAI:
@@ -251,9 +276,8 @@ class FinoraAI:
                         "market_status",
                         entities
                     )
-            except Exception as e:
-                print(f"YFinance error for {ticker}: {e}")
-                pass
+            except Exception as exc:
+                logger.warning('yfinance ticker fetch failed for %s: %s', ticker, exc)
 
         intent = None
         lower = message.lower()

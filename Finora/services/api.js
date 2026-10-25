@@ -183,6 +183,95 @@ export const aiAPI = {
     if (conversationId) payload.conversation_id = conversationId;
     return api.post('ai/chat/', payload);
   },
+
+  /**
+   * Stream a chat reply using Server-Sent Events.
+   *
+   * @param {string}   message         - The user's message text
+   * @param {string|null} conversationId - Existing conversation UUID (or null for new)
+   * @param {function} onToken         - Called with each streamed word token: (token: string) => void
+   * @param {function} onDone          - Called when stream ends: ({ intent, entities, conversation_id }) => void
+   * @param {function} onError         - Called on network/parse error: (errorMsg: string) => void
+   * @returns {function}               - Abort function — call it to cancel the stream
+   */
+  chatStream: async (message, conversationId, onToken, onDone, onError) => {
+    // Read JWT access token from secure storage
+    const token = await SecureStore.getItemAsync('access_token');
+    if (!token) {
+      onError('Not authenticated');
+      return () => {};
+    }
+
+    const url = `${BASE_URL}ai/chat/stream/`;
+    const body = JSON.stringify(
+      conversationId ? { message, conversation_id: conversationId } : { message }
+    );
+
+    const controller = new AbortController();
+
+    // Use fetch() — axios does not support streaming on React Native
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body,
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          onError(`Server error: ${response.status}`);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE events are separated by double newline
+          const parts = buffer.split('\n\n');
+          // The last part may be incomplete — keep it in the buffer
+          buffer = parts.pop() ?? '';
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith('data:')) continue;
+            const jsonStr = line.slice(5).trim();
+            try {
+              const event = JSON.parse(jsonStr);
+              if (event.type === 'token') {
+                onToken(event.token);
+              } else if (event.type === 'done') {
+                onDone({
+                  intent:          event.intent,
+                  entities:        event.entities,
+                  conversation_id: event.conversation_id,
+                });
+              } else if (event.type === 'error') {
+                onError(event.message ?? 'Stream error');
+              }
+            } catch {
+              // Malformed JSON in one event — skip it, don't break the stream
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return; // User cancelled — ignore
+        onError(err.message ?? 'Connection error');
+      });
+
+    // Return abort function so the caller can cancel (e.g. on unmount)
+    return () => controller.abort();
+  },
   getHistory: () => api.get('ai/chat/history/'),
   getInsight: () => api.get('ai/insight/'),
 };
