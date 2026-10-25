@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
+  View, Text, TextInput, TouchableOpacity, FlatList,
   Platform, Keyboard, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,376 +11,288 @@ import { router } from 'expo-router';
 import { aiAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
-// ── Quick-prompt chips shown on a new/empty session ──────────────────────────
+// ─── Quick prompts ────────────────────────────────────────────────────────────
 const QUICK_PROMPTS = [
-  { id: '1', label: '💰 Check My Balance',    query: 'What is my current net balance?' },
-  { id: '2', label: '📊 Spending Breakdown',  query: 'Show my spending breakdown this month' },
-  { id: '3', label: '🎯 Goals Progress',      query: 'How are my savings goals progressing?' },
-  { id: '4', label: '💡 50/30/20 Rule',       query: 'What is the 50/30/20 budgeting rule?' },
-  { id: '5', label: '📈 Live Market Intel',   query: 'How is the market doing today?' },
-  { id: '6', label: '🏖️ Retirement Savings', query: 'How much should I save for retirement?' },
-  { id: '7', label: '💳 Debt Strategies',     query: 'What is the avalanche vs snowball debt method?' },
+  { id: '1', emoji: '💰', label: 'My Balance',      query: 'What is my current net balance?' },
+  { id: '2', emoji: '📊', label: 'Spending',        query: 'Show my spending breakdown this month' },
+  { id: '3', emoji: '🎯', label: 'Goals',           query: 'How are my savings goals progressing?' },
+  { id: '4', emoji: '💡', label: '50/30/20',        query: 'What is the 50/30/20 budgeting rule?' },
+  { id: '5', emoji: '📈', label: 'Market',          query: 'How is the market doing today?' },
+  { id: '6', emoji: '🏖️', label: 'Retirement',     query: 'How much should I save for retirement?' },
+  { id: '7', emoji: '💳', label: 'Debt',            query: 'What is the avalanche vs snowball debt method?' },
 ];
 
-// ── Inline markdown renderer ──────────────────────────────────────────────────
-
-/** Parses **bold** segments inside a single line. */
+// ─── Markdown-lite renderer ───────────────────────────────────────────────────
 function renderBoldRuns(str) {
-  const parts = str.split(/(\*\*.*?\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return (
-        <Text key={i} style={{ fontWeight: '800', color: '#0F172A' }}>
-          {part.slice(2, -2)}
-        </Text>
-      );
-    }
-    return part;
-  });
+  const parts = str.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith('**') && p.endsWith('**')
+      ? <Text key={i} style={{ fontWeight: '800', color: '#0F172A' }}>{p.slice(2, -2)}</Text>
+      : p
+  );
 }
 
-/** Renders a bot message with bullets, headers, and bold text. */
-function FormattedMessage({ text, role, isStreaming }) {
-  if (role === 'user') {
-    return <Text style={styles.userText}>{text}</Text>;
-  }
-
+function BotMessage({ text, isStreaming }) {
   const lines = text.split('\n');
-
   return (
-    <View style={styles.botTextContainer}>
+    <View style={{ gap: 3 }}>
       {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <View key={idx} style={{ height: 6 }} />;
-
-        const isBullet =
-          /^[-*•]\s+/.test(trimmed) ||
-          /^[💰🎯📈📊💳🏠🏖️💡•✅⚠️]\s*/.test(trimmed);
-        const isHeader =
-          !isBullet &&
-          (trimmed.endsWith(':') ||
-            trimmed.startsWith('Live Market') ||
-            trimmed.startsWith('Health Score'));
-
+        const t = line.trim();
+        if (!t) return <View key={idx} style={{ height: 5 }} />;
+        const isBullet = /^[-*•]\s+/.test(t) || /^[💰🎯📈📊💳🏠🏖️💡✅⚠️🌐]\s*/.test(t);
+        const isHeader = !isBullet && (t.endsWith(':') || /^(Live Market|Health Score|Portfolio|Balanced)/.test(t));
         return (
-          <View key={idx} style={[styles.lineRow, isBullet && styles.bulletRow]}>
-            {isBullet && !/^[💰🎯📈📊💳🏠🏖️💡•✅⚠️]/.test(trimmed) && (
-              <View style={styles.bulletDot} />
+          <View key={idx} style={[{ flexDirection: 'row', alignItems: 'flex-start' }, isBullet && { marginVertical: 1 }]}>
+            {isBullet && !/^[💰🎯📈📊💳🏠🏖️💡✅⚠️🌐]/.test(t) && (
+              <View style={styles.bullet} />
             )}
-            <Text
-              style={[
-                styles.botText,
-                isHeader && styles.headerText,
-                isBullet && styles.bulletText,
-              ]}
-            >
-              {renderBoldRuns(trimmed.replace(/^[-*•]\s+/, ''))}
+            <Text style={[styles.botText, isHeader && styles.botHeader, isBullet && styles.botBulletText]}>
+              {renderBoldRuns(t.replace(/^[-*•]\s+/, ''))}
             </Text>
           </View>
         );
       })}
-      {/* Blinking cursor while streaming */}
       {isStreaming && <Text style={styles.cursor}>▋</Text>}
     </View>
   );
 }
 
-// ── Context action buttons below bot messages ─────────────────────────────────
+// ─── Context deep-link buttons ────────────────────────────────────────────────
 function ContextActions({ intent, text }) {
   const lower = (text || '').toLowerCase();
   const actions = [];
-
   if (intent === 'check_balance' || lower.includes('balance') || lower.includes('spending')) {
-    actions.push({ label: 'View Expenses',  icon: 'receipt-outline',      route: '/(tabs)/expenses' });
-    actions.push({ label: '+ Add Expense',  icon: 'add-circle-outline',   route: '/add-expense' });
-  } else if (intent === 'goals_status' || lower.includes('goal')) {
-    actions.push({ label: 'View Goals',     icon: 'flag-outline',         route: '/(tabs)/goals' });
-    actions.push({ label: '+ New Goal',     icon: 'add-circle-outline',   route: '/add-goal' });
-  } else if (
-    intent === 'market_status' ||
-    lower.includes('stock') ||
-    lower.includes('portfolio') ||
-    lower.includes('market')
-  ) {
-    actions.push({ label: 'View Portfolio', icon: 'trending-up-outline',  route: '/(tabs)/invest' });
-    actions.push({ label: '+ Add Holding',  icon: 'add-circle-outline',   route: '/add-investment' });
-  } else if (lower.includes('salary') || lower.includes('cost of living')) {
-    actions.push({ label: 'Salary Reality', icon: 'calculator-outline',   route: '/(tabs)/salary-reality' });
+    actions.push({ label: 'Expenses',  icon: 'receipt-outline',    route: '/(tabs)/expenses' });
+    actions.push({ label: 'Add',       icon: 'add-circle-outline', route: '/add-expense' });
+  } else if (lower.includes('goal')) {
+    actions.push({ label: 'Goals',     icon: 'flag-outline',       route: '/(tabs)/goals' });
+    actions.push({ label: 'New Goal',  icon: 'add-circle-outline', route: '/add-goal' });
+  } else if (intent === 'market_status' || lower.includes('stock') || lower.includes('market')) {
+    actions.push({ label: 'Portfolio', icon: 'trending-up-outline',route: '/(tabs)/invest' });
+    actions.push({ label: 'Add',       icon: 'add-circle-outline', route: '/add-investment' });
+  } else if (lower.includes('salary')) {
+    actions.push({ label: 'Salary Reality', icon: 'calculator-outline', route: '/(tabs)/salary-reality' });
   }
-
-  if (actions.length === 0) return null;
-
+  if (!actions.length) return null;
   return (
-    <View style={styles.actionRow}>
-      {actions.map((act, i) => (
-        <TouchableOpacity
-          key={i}
-          style={styles.actionBtn}
-          onPress={() => router.push(act.route)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name={act.icon} size={14} color="#2563EB" />
-          <Text style={styles.actionBtnText}>{act.label}</Text>
+    <View style={styles.ctxRow}>
+      {actions.map((a, i) => (
+        <TouchableOpacity key={i} style={styles.ctxBtn} onPress={() => router.push(a.route)} activeOpacity={0.7}>
+          <Ionicons name={a.icon} size={13} color="#2563EB" />
+          <Text style={styles.ctxBtnText}>{a.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
+// ─── Single message bubble ────────────────────────────────────────────────────
+function MessageBubble({ msg, isStreamingThis }) {
+  const isUser = msg.role === 'user';
+  return (
+    <View style={[styles.rowWrap, isUser ? styles.rowUser : styles.rowBot]}>
+      {!isUser && (
+        <View style={styles.avatar}>
+          <Ionicons name="sparkles" size={13} color="#2563EB" />
+        </View>
+      )}
+      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}>
+        {isUser ? (
+          <Text style={styles.userText}>{msg.text}</Text>
+        ) : msg.text === '' && isStreamingThis ? (
+          <View style={styles.typingRow}>
+            <View style={styles.dot1} />
+            <View style={styles.dot2} />
+            <View style={styles.dot3} />
+          </View>
+        ) : (
+          <>
+            <BotMessage text={msg.text} isStreaming={isStreamingThis} />
+            {!isStreamingThis && msg.intent && msg.intent !== 'welcome' && (
+              <ContextActions intent={msg.intent} text={msg.text} />
+            )}
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function AiScreen() {
-  const insets = useSafeAreaInsets();
+  const insets  = useSafeAreaInsets();
   const { user } = useAuth();
 
-  const greeting = `Hello ${user?.full_name || user?.username || 'there'}! 👋 I am your Finora Neural Coach.\n\nI can analyse your spending, forecast goal timelines, explain market trends, or answer any finance question. How can I help you today?`;
+  const greeting = `Hi ${user?.full_name?.split(' ')[0] || user?.username || 'there'} 👋  I'm your Finora AI Coach.\n\nAsk me about your balance, spending, goals, investments, or any finance question.`;
 
-  const [messages, setMessages] = useState([
-    { id: '1', role: 'bot', text: greeting, intent: 'welcome' },
-  ]);
-  const [inputText, setInputText]           = useState('');
-  const [isStreaming, setIsStreaming]        = useState(false);
-  const [streamingMsgId, setStreamingMsgId] = useState(null);
-  const [conversationId, setConversationId] = useState(null);
+  const [messages, setMessages]           = useState([{ id: '0', role: 'bot', text: greeting, intent: 'welcome' }]);
+  const [inputText, setInputText]         = useState('');
+  const [isStreaming, setIsStreaming]      = useState(false);
+  const [streamingId, setStreamingId]     = useState(null);
+  const [conversationId, setConvId]       = useState(null);
 
-  const scrollViewRef  = useRef(null);
-  const abortStreamRef = useRef(null);
+  const listRef      = useRef(null);
+  const abortRef     = useRef(null);
+  const inputRef     = useRef(null);
 
-  // Abort active stream on unmount
-  useEffect(() => {
-    return () => abortStreamRef.current?.();
+  useEffect(() => () => abortRef.current?.(), []);
+
+  const scrollDown = useCallback(() => {
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
   }, []);
 
-  const scrollToBottom = useCallback(() => {
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
-  }, []);
-
-  // ── Main send handler ─────────────────────────────────────────────────────
-  const handleSend = async (manualText = null) => {
+  const handleSend = async (manualText) => {
     const text = (manualText ?? inputText).trim();
     if (!text || isStreaming) return;
-
     Keyboard.dismiss();
 
-    // Add user bubble
-    const userMsgId = Date.now().toString();
-    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', text }]);
+    const userMsgId = `u-${Date.now()}`;
+    const botMsgId  = `b-${Date.now()}`;
+
+    setMessages(p => [
+      ...p,
+      { id: userMsgId, role: 'user', text },
+      { id: botMsgId,  role: 'bot',  text: '', intent: null },
+    ]);
     setInputText('');
-
-    // Add an empty bot bubble that will be filled token-by-token
-    const botMsgId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, { id: botMsgId, role: 'bot', text: '', intent: null }]);
-    setStreamingMsgId(botMsgId);
+    setStreamingId(botMsgId);
     setIsStreaming(true);
-    scrollToBottom();
+    scrollDown();
 
-    // ── Stream (typewriter effect) ───────────────────────────────────────
     let abortFn = () => {};
-    abortStreamRef.current = () => abortFn();
+    abortRef.current = () => abortFn();
 
-    const returnedAbort = await aiAPI.chatStream(
+    const returned = await aiAPI.chatStream(
       text,
       conversationId,
-
-      // onToken — append each word to the streaming bubble
       (token) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === botMsgId ? { ...m, text: m.text + token } : m,
-          ),
-        );
-        scrollToBottom();
+        setMessages(p => p.map(m => m.id === botMsgId ? { ...m, text: m.text + token } : m));
+        scrollDown();
       },
-
-      // onDone — attach metadata and close the stream
       ({ intent, entities, conversation_id }) => {
-        if (conversation_id && !conversationId) {
-          setConversationId(conversation_id);
-        }
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === botMsgId ? { ...m, intent, entities } : m,
-          ),
-        );
+        if (conversation_id && !conversationId) setConvId(conversation_id);
+        setMessages(p => p.map(m => m.id === botMsgId ? { ...m, intent } : m));
         setIsStreaming(false);
-        setStreamingMsgId(null);
-        scrollToBottom();
+        setStreamingId(null);
+        scrollDown();
       },
-
-      // onError — show error message in the bubble
-      (errMsg) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === botMsgId
-              ? {
-                  ...m,
-                  text: 'I encountered a connection issue. Please check the server is running and try again.',
-                }
-              : m,
-          ),
-        );
+      () => {
+        setMessages(p => p.map(m =>
+          m.id === botMsgId
+            ? { ...m, text: 'Connection issue — make sure the server is running and try again.' }
+            : m
+        ));
         setIsStreaming(false);
-        setStreamingMsgId(null);
+        setStreamingId(null);
       },
     );
-
-    // Wire the real abort function once it's available
-    if (returnedAbort) abortFn = returnedAbort;
+    if (returned) abortFn = returned;
   };
 
-  // ── Reset conversation ────────────────────────────────────────────────────
-  const handleResetChat = () => {
-    abortStreamRef.current?.();
+  const handleReset = () => {
+    abortRef.current?.();
     setIsStreaming(false);
-    setStreamingMsgId(null);
-    setConversationId(null);
-    setMessages([
-      { id: Date.now().toString(), role: 'bot', text: greeting, intent: 'welcome' },
-    ]);
+    setStreamingId(null);
+    setConvId(null);
+    setMessages([{ id: `0-${Date.now()}`, role: 'bot', text: greeting, intent: 'welcome' }]);
   };
 
-  const isNewSession = messages.length <= 1;
+  const isNew = messages.length <= 1;
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#F8FAFC' }}
+      style={{ flex: 1, backgroundColor: '#F0F4FF' }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* ── Header ── */}
       <LinearGradient
-        colors={['#1E3A8A', '#2563EB']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: Math.max(insets.top + 8, 36) }]}
+        colors={['#1E3A8A', '#3B5FD9']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
-        <View style={styles.headerTop}>
+        <View style={styles.headerInner}>
           <View style={styles.headerLeft}>
-            <View style={styles.botAvatar}>
-              <Ionicons name="sparkles" size={20} color="#2563EB" />
-            </View>
+            <LinearGradient colors={['#60A5FA', '#2563EB']} style={styles.headerAvatar}>
+              <Ionicons name="sparkles" size={18} color="#fff" />
+            </LinearGradient>
             <View>
-              <Text style={styles.headerTitle}>Neural Coach</Text>
-              <View style={styles.statusBadge}>
-                <View style={[styles.statusDot, isStreaming && styles.statusDotStreaming]} />
-                <Text style={styles.statusText}>
-                  {isStreaming ? 'Thinking…' : 'Active Intelligence'}
-                </Text>
+              <Text style={styles.headerName}>Finora Coach</Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.statusDot, isStreaming && { backgroundColor: '#FCD34D' }]} />
+                <Text style={styles.statusLabel}>{isStreaming ? 'Thinking…' : 'Online'}</Text>
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={handleResetChat}
-            style={styles.newChatBtn}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.newChatText}>New Chat</Text>
+          <TouchableOpacity onPress={handleReset} style={styles.newBtn} activeOpacity={0.75}>
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.newBtnText}>New</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      {/* ── Quick suggestion chips (new session only) ── */}
-      {isNewSession && (
-        <View style={styles.suggestionsContainer}>
-          <Text style={styles.suggestionsHeader}>Quick Insights</Text>
-          <ScrollView
+      {/* ── Quick prompt chips ── */}
+      {isNew && (
+        <View style={styles.chipsWrap}>
+          <FlatList
+            data={QUICK_PROMPTS}
             horizontal
+            keyExtractor={i => i.id}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.suggestionsList}
-          >
-            {QUICK_PROMPTS.map((prompt) => (
-              <TouchableOpacity
-                key={prompt.id}
-                style={styles.promptChip}
-                onPress={() => handleSend(prompt.query)}
-                activeOpacity={0.7}
+            contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}
+            renderItem={({ item }) => (
+              <Pressable
+                style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
+                onPress={() => handleSend(item.query)}
                 disabled={isStreaming}
               >
-                <Text style={styles.promptChipText}>{prompt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                <Text style={styles.chipEmoji}>{item.emoji}</Text>
+                <Text style={styles.chipLabel}>{item.label}</Text>
+              </Pressable>
+            )}
+          />
         </View>
       )}
 
-      {/* ── Chat messages ── */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
-        onContentSizeChange={scrollToBottom}
+      {/* ── Messages ── */}
+      <FlatList
+        ref={listRef}
+        data={messages}
+        keyExtractor={m => m.id}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-      >
-        {messages.map((msg) => (
-          <View
-            key={msg.id}
-            style={[styles.messageRow, msg.role === 'user' ? styles.userRow : styles.botRow]}
-          >
-            {msg.role === 'bot' && (
-              <View style={styles.botMiniAvatar}>
-                <Ionicons name="sparkles" size={14} color="#2563EB" />
-              </View>
-            )}
-            <View
-              style={[
-                styles.messageBubble,
-                msg.role === 'user' ? styles.userBubble : styles.botBubble,
-              ]}
-            >
-              {msg.role === 'bot' && msg.text === '' && msg.id === streamingMsgId ? (
-                <View style={styles.typingRow}>
-                  <ActivityIndicator size="small" color="#2563EB" />
-                  <Text style={styles.typingText}>Analysing…</Text>
-                </View>
-              ) : (
-                <FormattedMessage
-                  text={msg.text}
-                  role={msg.role}
-                  isStreaming={msg.id === streamingMsgId && isStreaming}
-                />
-              )}
-              {msg.role === 'bot' &&
-                msg.intent &&
-                msg.intent !== 'welcome' &&
-                msg.id !== streamingMsgId && (
-                  <ContextActions intent={msg.intent} text={msg.text} />
-                )}
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+        onContentSizeChange={scrollDown}
+        renderItem={({ item }) => (
+          <MessageBubble msg={item} isStreamingThis={item.id === streamingId && isStreaming} />
+        )}
+      />
 
-      {/* ── Input bar — sits directly above the keyboard ── */}
-      <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 80 }]}>
-        <View style={styles.inputPill}>
+      {/* ── Input bar ── */}
+      <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 76 }]}>
+        <View style={styles.inputRow}>
           <TextInput
-            style={styles.textInput}
-            placeholder="Ask anything about your money, goals, or market…"
+            ref={inputRef}
+            style={styles.input}
+            placeholder="Ask anything…"
             placeholderTextColor="#94A3B8"
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={() => handleSend()}
             returnKeyType="send"
-            multiline={false}
             editable={!isStreaming}
+            multiline
           />
           <TouchableOpacity
+            style={[styles.sendBtn, (!inputText.trim() || isStreaming) && styles.sendBtnOff]}
             onPress={() => handleSend()}
-            disabled={isStreaming || !inputText.trim()}
-            style={[
-              styles.sendBtn,
-              { backgroundColor: !isStreaming && inputText.trim() ? '#2563EB' : '#E2E8F0' },
-            ]}
+            disabled={!inputText.trim() || isStreaming}
             activeOpacity={0.8}
           >
-            {isStreaming ? (
-              <ActivityIndicator size="small" color="#94A3B8" />
-            ) : (
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-            )}
+            {isStreaming
+              ? <ActivityIndicator size="small" color="#94A3B8" />
+              : <Ionicons name="arrow-up" size={18} color="#fff" />
+            }
           </TouchableOpacity>
         </View>
       </View>
@@ -388,276 +300,115 @@ export default function AiScreen() {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  header: {
-    paddingBottom: 18,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    shadowColor: '#1E3A8A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
+  // Header
+  header: { paddingHorizontal: 18, paddingBottom: 16 },
+  headerInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerAvatar: {
+    width: 42, height: 42, borderRadius: 13,
+    justifyContent: 'center', alignItems: 'center',
   },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  headerName: { fontSize: 17, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399' },
+  statusLabel: { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
+  newBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  newBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  // Chips
+  chipsWrap: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', backgroundColor: '#F0F4FF' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1, borderColor: '#DBEAFE',
   },
-  botAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  chipEmoji: { fontSize: 14 },
+  chipLabel: { fontSize: 12, fontWeight: '700', color: '#1E3A8A' },
+
+  // Message rows
+  rowWrap: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12, gap: 8 },
+  rowUser: { justifyContent: 'flex-end' },
+  rowBot:  { justifyContent: 'flex-start' },
+  avatar: {
+    width: 28, height: 28, borderRadius: 9,
+    backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 2,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#34D399',
-  },
-  statusDotStreaming: {
-    backgroundColor: '#FBBF24',  // amber while thinking
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  newChatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  newChatText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  suggestionsContainer: {
-    paddingVertical: 12,
-    backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  suggestionsHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  suggestionsList: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  promptChip: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  promptChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-  messageRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    gap: 8,
-  },
-  userRow: {
-    justifyContent: 'flex-end',
-  },
-  botRow: {
-    justifyContent: 'flex-start',
-  },
-  botMiniAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  messageBubble: {
-    maxWidth: '84%',
-    borderRadius: 20,
-    padding: 14,
-  },
-  userBubble: {
+
+  // Bubbles
+  bubble: { maxWidth: '80%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  bubbleUser: {
     backgroundColor: '#2563EB',
     borderBottomRightRadius: 4,
   },
-  botBubble: {
-    backgroundColor: '#FFFFFF',
+  bubbleBot: {
+    backgroundColor: '#fff',
     borderBottomLeftRadius: 4,
-    shadowColor: '#0F172A',
+    shadowColor: '#1E3A8A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.07,
     shadowRadius: 8,
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#EEF2FF',
   },
-  userText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#FFFFFF',
-    fontWeight: '500',
+
+  // Text
+  userText: { fontSize: 15, color: '#fff', fontWeight: '500', lineHeight: 22 },
+  botText:  { fontSize: 15, color: '#1E293B', fontWeight: '500', lineHeight: 22, flex: 1 },
+  botHeader: { fontWeight: '800', color: '#0F172A', marginBottom: 2 },
+  botBulletText: { color: '#334155' },
+  bullet: {
+    width: 5, height: 5, borderRadius: 2.5,
+    backgroundColor: '#2563EB', marginTop: 9, marginRight: 7,
   },
-  botTextContainer: {
-    gap: 2,
+  cursor: { color: '#2563EB', fontSize: 15, fontWeight: '800', marginTop: 2 },
+
+  // Typing dots
+  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
+  dot1: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#93C5FD' },
+  dot2: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#60A5FA' },
+  dot3: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#3B82F6' },
+
+  // Context actions
+  ctxRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  ctxBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 12, borderWidth: 1, borderColor: '#BFDBFE',
   },
-  lineRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  ctxBtnText: { fontSize: 11, fontWeight: '700', color: '#2563EB' },
+
+  // Input bar
+  inputWrap: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 14, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: '#E2E8F0',
   },
-  bulletRow: {
-    marginTop: 2,
-    marginBottom: 2,
+  inputRow: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    backgroundColor: '#F1F5F9', borderRadius: 24,
+    borderWidth: 1, borderColor: '#E2E8F0',
+    paddingLeft: 16, paddingRight: 5, paddingVertical: 5,
   },
-  bulletDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#2563EB',
-    marginTop: 8,
-    marginRight: 8,
-  },
-  botText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#334155',
-    fontWeight: '500',
-    flex: 1,
-  },
-  headerText: {
-    fontWeight: '800',
-    color: '#0F172A',
-    fontSize: 15,
-    marginBottom: 4,
-  },
-  bulletText: {
-    color: '#1E293B',
-  },
-  cursor: {
-    color: '#2563EB',
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  typingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  typingText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  actionBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  inputContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  inputPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 26,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  textInput: {
-    flex: 1,
-    height: 44,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: '#0F172A',
+  input: {
+    flex: 1, fontSize: 15, color: '#0F172A',
+    maxHeight: 100, paddingTop: Platform.OS === 'ios' ? 8 : 4,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 4,
   },
   sendBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#2563EB',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 2,
   },
+  sendBtnOff: { backgroundColor: '#CBD5E1' },
 });

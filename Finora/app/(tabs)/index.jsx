@@ -78,8 +78,14 @@ export default function HomeScreen() {
     queryKey: ['aiInsight'],
     queryFn: async () => {
       const res = await authAPI.getDashboardInsight();
-      return res.data.ai_suggestion;
-    }
+      // endpoint returns { insights: [...strings], balance, monthly_income, ... }
+      const insights = res.data?.insights;
+      if (Array.isArray(insights) && insights.length > 0) {
+        return insights.join('\n\n');
+      }
+      return null;
+    },
+    retry: 1,
   });
 
   const onRefresh = () => {
