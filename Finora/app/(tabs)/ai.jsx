@@ -1,8 +1,18 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+/**
+ * AI Coach screen
+ *
+ * Architecture:
+ *  - Messages array lives in state (triggers re-render per message added/finished)
+ *  - During streaming the live text is written into a ref AND a separate
+ *    `streamText` state that only the streaming bubble reads — so we only
+ *    re-render the ONE streaming bubble on each token, not the whole list
+ *  - ScrollView (not FlatList) avoids virtualisation flicker
+ */
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
   Platform, Keyboard, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Pressable,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,296 +21,294 @@ import { router } from 'expo-router';
 import { aiAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
-// ─── Quick prompts ────────────────────────────────────────────────────────────
 const QUICK_PROMPTS = [
-  { id: '1', emoji: '💰', label: 'My Balance',      query: 'What is my current net balance?' },
-  { id: '2', emoji: '📊', label: 'Spending',        query: 'Show my spending breakdown this month' },
-  { id: '3', emoji: '🎯', label: 'Goals',           query: 'How are my savings goals progressing?' },
-  { id: '4', emoji: '💡', label: '50/30/20',        query: 'What is the 50/30/20 budgeting rule?' },
-  { id: '5', emoji: '📈', label: 'Market',          query: 'How is the market doing today?' },
-  { id: '6', emoji: '🏖️', label: 'Retirement',     query: 'How much should I save for retirement?' },
-  { id: '7', emoji: '💳', label: 'Debt',            query: 'What is the avalanche vs snowball debt method?' },
+  { id: '1', emoji: '💰', label: 'My Balance',   query: 'What is my current net balance?' },
+  { id: '2', emoji: '📊', label: 'Spending',     query: 'Show my spending breakdown this month' },
+  { id: '3', emoji: '🎯', label: 'Goals',        query: 'How are my savings goals progressing?' },
+  { id: '4', emoji: '💡', label: '50/30/20',     query: 'What is the 50/30/20 budgeting rule?' },
+  { id: '5', emoji: '📈', label: 'Market',       query: 'How is the market doing today?' },
+  { id: '6', emoji: '🏖️', label: 'Retirement',  query: 'How much should I save for retirement?' },
+  { id: '7', emoji: '💳', label: 'Debt',         query: 'What is the avalanche vs snowball debt method?' },
 ];
 
-// ─── Markdown-lite renderer ───────────────────────────────────────────────────
-function renderBoldRuns(str) {
-  const parts = str.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith('**') && p.endsWith('**')
-      ? <Text key={i} style={{ fontWeight: '800', color: '#0F172A' }}>{p.slice(2, -2)}</Text>
-      : p
+// ─── Bold text parser ────────────────────────────────────────────────────────
+function Bold({ children }) {
+  const parts = String(children).split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith('**') && p.endsWith('**')
+          ? <Text key={i} style={{ fontWeight: '800', color: '#0F172A' }}>{p.slice(2, -2)}</Text>
+          : <Text key={i}>{p}</Text>
+      )}
+    </>
   );
 }
 
-function BotMessage({ text, isStreaming }) {
-  const lines = text.split('\n');
+// ─── Bot message renderer ────────────────────────────────────────────────────
+function BotText({ text }) {
   return (
-    <View style={{ gap: 3 }}>
-      {lines.map((line, idx) => {
+    <View>
+      {text.split('\n').map((line, i) => {
         const t = line.trim();
-        if (!t) return <View key={idx} style={{ height: 5 }} />;
-        const isBullet = /^[-*•]\s+/.test(t) || /^[💰🎯📈📊💳🏠🏖️💡✅⚠️🌐]\s*/.test(t);
-        const isHeader = !isBullet && (t.endsWith(':') || /^(Live Market|Health Score|Portfolio|Balanced)/.test(t));
+        if (!t) return <View key={i} style={{ height: 4 }} />;
+        const isBullet = /^[-*•]\s+/.test(t) || /^[💰🎯📈📊💳🏠🏖️💡✅⚠️🌐]\s/.test(t);
+        const isHeader = !isBullet && (t.endsWith(':') ||
+          /^(Live Market|Health Score|Portfolio|Balanced|Projection)/.test(t));
         return (
-          <View key={idx} style={[{ flexDirection: 'row', alignItems: 'flex-start' }, isBullet && { marginVertical: 1 }]}>
-            {isBullet && !/^[💰🎯📈📊💳🏠🏖️💡✅⚠️🌐]/.test(t) && (
-              <View style={styles.bullet} />
-            )}
-            <Text style={[styles.botText, isHeader && styles.botHeader, isBullet && styles.botBulletText]}>
-              {renderBoldRuns(t.replace(/^[-*•]\s+/, ''))}
+          <View key={i} style={[S.lineRow, isBullet && { marginVertical: 2 }]}>
+            {isBullet && !/^[💰🎯📈📊💳🏠🏖️💡✅⚠️🌐]/.test(t) && <View style={S.dot} />}
+            <Text style={[S.botTxt, isHeader && S.botHead]}>
+              <Bold>{t.replace(/^[-*•]\s+/, '')}</Bold>
             </Text>
           </View>
         );
       })}
-      {isStreaming && <Text style={styles.cursor}>▋</Text>}
     </View>
   );
 }
 
-// ─── Context deep-link buttons ────────────────────────────────────────────────
-function ContextActions({ intent, text }) {
-  const lower = (text || '').toLowerCase();
-  const actions = [];
-  if (intent === 'check_balance' || lower.includes('balance') || lower.includes('spending')) {
-    actions.push({ label: 'Expenses',  icon: 'receipt-outline',    route: '/(tabs)/expenses' });
-    actions.push({ label: 'Add',       icon: 'add-circle-outline', route: '/add-expense' });
-  } else if (lower.includes('goal')) {
-    actions.push({ label: 'Goals',     icon: 'flag-outline',       route: '/(tabs)/goals' });
-    actions.push({ label: 'New Goal',  icon: 'add-circle-outline', route: '/add-goal' });
-  } else if (intent === 'market_status' || lower.includes('stock') || lower.includes('market')) {
-    actions.push({ label: 'Portfolio', icon: 'trending-up-outline',route: '/(tabs)/invest' });
-    actions.push({ label: 'Add',       icon: 'add-circle-outline', route: '/add-investment' });
-  } else if (lower.includes('salary')) {
-    actions.push({ label: 'Salary Reality', icon: 'calculator-outline', route: '/(tabs)/salary-reality' });
+// ─── Context action buttons ──────────────────────────────────────────────────
+function Actions({ intent, text }) {
+  const lo = (text || '').toLowerCase();
+  const btns = [];
+  if (intent === 'check_balance' || lo.includes('balance') || lo.includes('spending')) {
+    btns.push({ l: 'Expenses', i: 'receipt-outline',    r: '/(tabs)/expenses' });
+    btns.push({ l: '+ Expense', i: 'add-circle-outline', r: '/add-expense' });
+  } else if (lo.includes('goal')) {
+    btns.push({ l: 'Goals',    i: 'flag-outline',        r: '/(tabs)/goals' });
+    btns.push({ l: '+ Goal',   i: 'add-circle-outline',  r: '/add-goal' });
+  } else if (intent === 'market_status' || lo.includes('stock') || lo.includes('market')) {
+    btns.push({ l: 'Portfolio', i: 'trending-up-outline', r: '/(tabs)/invest' });
+    btns.push({ l: '+ Holding', i: 'add-circle-outline',  r: '/add-investment' });
+  } else if (lo.includes('salary')) {
+    btns.push({ l: 'Salary Reality', i: 'calculator-outline', r: '/(tabs)/salary-reality' });
   }
-  if (!actions.length) return null;
+  if (!btns.length) return null;
   return (
-    <View style={styles.ctxRow}>
-      {actions.map((a, i) => (
-        <TouchableOpacity key={i} style={styles.ctxBtn} onPress={() => router.push(a.route)} activeOpacity={0.7}>
-          <Ionicons name={a.icon} size={13} color="#2563EB" />
-          <Text style={styles.ctxBtnText}>{a.label}</Text>
+    <View style={S.actRow}>
+      {btns.map((b, i) => (
+        <TouchableOpacity key={i} style={S.actBtn} onPress={() => router.push(b.r)} activeOpacity={0.75}>
+          <Ionicons name={b.i} size={12} color="#2563EB" />
+          <Text style={S.actTxt}>{b.l}</Text>
         </TouchableOpacity>
       ))}
     </View>
   );
 }
 
-// ─── Single message bubble ────────────────────────────────────────────────────
-function MessageBubble({ msg, isStreamingThis }) {
-  const isUser = msg.role === 'user';
-
-  // Don't render the bot bubble at all until it has content OR is the active
-  // streaming bubble — this eliminates the white vertical bar completely
-  if (!isUser && msg.text === '' && !isStreamingThis) return null;
-
+// ─── Typing dots ─────────────────────────────────────────────────────────────
+function TypingDots() {
   return (
-    <View style={[styles.rowWrap, isUser ? styles.rowUser : styles.rowBot]}>
-      {!isUser && (
-        <View style={styles.avatar}>
-          <Ionicons name="sparkles" size={13} color="#2563EB" />
-        </View>
-      )}
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}>
-        {isUser ? (
-          <Text style={styles.userText}>{msg.text}</Text>
-        ) : msg.text === '' ? (
-          // Three animated dots — shown while waiting for first token
-          <View style={styles.typingRow}>
-            <View style={styles.dot1} />
-            <View style={styles.dot2} />
-            <View style={styles.dot3} />
-          </View>
-        ) : (
-          <>
-            <BotMessage text={msg.text} isStreaming={isStreamingThis} />
-            {!isStreamingThis && msg.intent && msg.intent !== 'welcome' && (
-              <ContextActions intent={msg.intent} text={msg.text} />
-            )}
-          </>
-        )}
-      </View>
+    <View style={S.dotsRow}>
+      <View style={[S.dot1]} /><View style={S.dot2} /><View style={S.dot3} />
     </View>
   );
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+// ─── Main screen ─────────────────────────────────────────────────────────────
 export default function AiScreen() {
-  const insets  = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
-  const greeting = `Hi ${user?.full_name?.split(' ')[0] || user?.username || 'there'} 👋  I'm your Finora AI Coach.\n\nAsk me about your balance, spending, goals, investments, or any finance question.`;
+  const greeting = `Hi ${user?.full_name?.split(' ')[0] || user?.username || 'there'} 👋\n\nI'm your Finora AI Coach. Ask me about your balance, spending, goals, investments, or any finance question.`;
 
-  const [messages, setMessages]           = useState([{ id: '0', role: 'bot', text: greeting, intent: 'welcome' }]);
-  const [inputText, setInputText]         = useState('');
-  const [isStreaming, setIsStreaming]      = useState(false);
-  const [streamingId, setStreamingId]     = useState(null);
-  const [conversationId, setConvId]       = useState(null);
+  // Committed messages (rendered as static bubbles)
+  const [msgs, setMsgs] = useState([{ id: '0', role: 'bot', text: greeting, intent: 'welcome' }]);
 
-  const listRef      = useRef(null);
-  const abortRef     = useRef(null);
-  const inputRef     = useRef(null);
+  // Live streaming text — only used by the single streaming bubble
+  const [streamText, setStreamText] = useState('');
+  const [streaming, setStreaming]   = useState(false);
+  const [convId, setConvId]         = useState(null);
+  const [input, setInput]           = useState('');
+
+  const scrollRef = useRef(null);
+  const abortRef  = useRef(null);
+  const streamRef = useRef('');   // accumulates tokens without triggering map re-renders
 
   useEffect(() => () => abortRef.current?.(), []);
 
   const scrollDown = useCallback(() => {
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   }, []);
 
-  const handleSend = async (manualText) => {
-    const text = (manualText ?? inputText).trim();
-    if (!text || isStreaming) return;
+  const handleSend = async (manual) => {
+    const text = (manual ?? input).trim();
+    if (!text || streaming) return;
     Keyboard.dismiss();
 
-    const userMsgId = `u-${Date.now()}`;
-    const botMsgId  = `b-${Date.now()}`;
+    // 1. Add user message to committed list
+    setMsgs(p => [...p, { id: `u${Date.now()}`, role: 'user', text }]);
+    setInput('');
 
-    // Add user bubble + empty bot bubble (shows dots immediately)
-    setMessages(p => [
-      ...p,
-      { id: userMsgId, role: 'user', text },
-      { id: botMsgId,  role: 'bot',  text: '', intent: null },
-    ]);
-    setInputText('');
-    setStreamingId(botMsgId);  // set BEFORE chatStream so dots render right away
-    setIsStreaming(true);
+    // 2. Show streaming bubble (empty = dots)
+    streamRef.current = '';
+    setStreamText('');
+    setStreaming(true);
     scrollDown();
 
-    let abortFn = () => {};
-    abortRef.current = () => { abortFn(); };
+    let cancelled = false;
+    abortRef.current = () => { cancelled = true; };
 
-    const returned = await aiAPI.chatStream(
-      text,
-      conversationId,
-      // onToken — each word arrives here after the server responds
-      (token) => {
-        setMessages(p => p.map(m => m.id === botMsgId ? { ...m, text: m.text + token } : m));
-      },
-      // onDone
-      ({ intent, conversation_id }) => {
-        if (conversation_id && !conversationId) setConvId(conversation_id);
-        setMessages(p => p.map(m => m.id === botMsgId ? { ...m, intent } : m));
-        setIsStreaming(false);
-        setStreamingId(null);
-        scrollDown();
-      },
-      // onError
-      () => {
-        setMessages(p => p.map(m =>
-          m.id === botMsgId
-            ? { ...m, text: 'Connection issue — make sure the server is running and try again.' }
-            : m
-        ));
-        setIsStreaming(false);
-        setStreamingId(null);
-      },
-    );
-    if (returned) abortFn = returned;
+    try {
+      const res = await aiAPI.chat(text, convId);
+      const { reply, intent, conversation_id } = res.data;
+
+      if (cancelled) return;
+      if (conversation_id && !convId) setConvId(conversation_id);
+
+      // 3. Typewriter: write to ref + batch-update state every 3 words
+      const words = reply.split(' ');
+      for (let i = 0; i < words.length; i += 3) {
+        if (cancelled) return;
+        const chunk = words.slice(i, i + 3).join(' ') + (i + 3 < words.length ? ' ' : '');
+        streamRef.current += chunk;
+        setStreamText(streamRef.current);   // only this bubble re-renders
+        await new Promise(r => setTimeout(r, 20));
+      }
+
+      if (cancelled) return;
+
+      // 4. Commit final message to list, hide streaming bubble
+      setMsgs(p => [...p, { id: `b${Date.now()}`, role: 'bot', text: streamRef.current, intent }]);
+      setStreaming(false);
+      setStreamText('');
+      streamRef.current = '';
+      scrollDown();
+
+    } catch (err) {
+      if (cancelled) return;
+      setMsgs(p => [...p, {
+        id: `b${Date.now()}`, role: 'bot', intent: null,
+        text: 'Connection issue — make sure the server is running and try again.',
+      }]);
+      setStreaming(false);
+      setStreamText('');
+      streamRef.current = '';
+    }
   };
 
   const handleReset = () => {
     abortRef.current?.();
-    setIsStreaming(false);
-    setStreamingId(null);
+    setStreaming(false);
+    setStreamText('');
+    streamRef.current = '';
     setConvId(null);
-    setMessages([{ id: `0-${Date.now()}`, role: 'bot', text: greeting, intent: 'welcome' }]);
+    setMsgs([{ id: `0${Date.now()}`, role: 'bot', text: greeting, intent: 'welcome' }]);
   };
 
-  const isNew = messages.length <= 1;
+  const showChips = msgs.length <= 1 && !streaming;
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#F0F4FF' }}
+      style={{ flex: 1, backgroundColor: '#EEF2FF' }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* ── Header ── */}
+      {/* Header */}
       <LinearGradient
         colors={['#1E3A8A', '#3B5FD9']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}
+        style={[S.header, { paddingTop: insets.top + 10 }]}
       >
-        <View style={styles.headerInner}>
-          <View style={styles.headerLeft}>
-            <LinearGradient colors={['#60A5FA', '#2563EB']} style={styles.headerAvatar}>
-              <Ionicons name="sparkles" size={18} color="#fff" />
+        <View style={S.hRow}>
+          <View style={S.hLeft}>
+            <LinearGradient colors={['#60A5FA', '#2563EB']} style={S.hAvatar}>
+              <Ionicons name="sparkles" size={17} color="#fff" />
             </LinearGradient>
             <View>
-              <Text style={styles.headerName}>Finora Coach</Text>
-              <View style={styles.statusRow}>
-                <View style={[styles.statusDot, isStreaming && { backgroundColor: '#FCD34D' }]} />
-                <Text style={styles.statusLabel}>{isStreaming ? 'Thinking…' : 'Online'}</Text>
+              <Text style={S.hName}>Finora Coach</Text>
+              <View style={S.hStatus}>
+                <View style={[S.hDot, streaming && { backgroundColor: '#FCD34D' }]} />
+                <Text style={S.hSub}>{streaming ? 'Thinking…' : 'Online'}</Text>
               </View>
             </View>
           </View>
-          <TouchableOpacity onPress={handleReset} style={styles.newBtn} activeOpacity={0.75}>
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.newBtnText}>New</Text>
+          <TouchableOpacity onPress={handleReset} style={S.newBtn} activeOpacity={0.75}>
+            <Ionicons name="add" size={17} color="#fff" />
+            <Text style={S.newTxt}>New</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      {/* ── Quick prompt chips ── */}
-      {isNew && (
-        <View style={styles.chipsWrap}>
-          <FlatList
-            data={QUICK_PROMPTS}
-            horizontal
-            keyExtractor={i => i.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
-                onPress={() => handleSend(item.query)}
-                disabled={isStreaming}
-              >
-                <Text style={styles.chipEmoji}>{item.emoji}</Text>
-                <Text style={styles.chipLabel}>{item.label}</Text>
-              </Pressable>
-            )}
-          />
-        </View>
+      {/* Quick chips */}
+      {showChips && (
+        <ScrollView
+          horizontal showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, borderBottomWidth: 1, borderBottomColor: '#DDE3F0' }}
+          contentContainerStyle={{ padding: 10, gap: 8 }}
+        >
+          {QUICK_PROMPTS.map(p => (
+            <TouchableOpacity key={p.id} style={S.chip} onPress={() => handleSend(p.query)} activeOpacity={0.7}>
+              <Text style={{ fontSize: 14 }}>{p.emoji}</Text>
+              <Text style={S.chipTxt}>{p.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       )}
 
-      {/* ── Messages ── */}
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={m => m.id}
-        contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 }}
+      {/* Messages */}
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 14, paddingBottom: 10 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         onContentSizeChange={scrollDown}
-        renderItem={({ item }) => (
-          <MessageBubble msg={item} isStreamingThis={item.id === streamingId && isStreaming} />
-        )}
-      />
+      >
+        {/* Committed messages */}
+        {msgs.map(m => (
+          <View key={m.id} style={[S.row, m.role === 'user' ? S.rowR : S.rowL]}>
+            {m.role === 'bot' && <View style={S.ava}><Ionicons name="sparkles" size={12} color="#2563EB" /></View>}
+            <View style={[S.bubble, m.role === 'user' ? S.bubU : S.bubB]}>
+              {m.role === 'user'
+                ? <Text style={S.uTxt}>{m.text}</Text>
+                : <>
+                    <BotText text={m.text} />
+                    {m.intent && m.intent !== 'welcome' && <Actions intent={m.intent} text={m.text} />}
+                  </>
+              }
+            </View>
+          </View>
+        ))}
 
-      {/* ── Input bar ── */}
-      <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 76 }]}>
-        <View style={styles.inputRow}>
+        {/* Streaming bubble — completely separate, no list re-render */}
+        {streaming && (
+          <View style={[S.row, S.rowL]}>
+            <View style={S.ava}><Ionicons name="sparkles" size={12} color="#2563EB" /></View>
+            <View style={[S.bubble, S.bubB]}>
+              {streamText === ''
+                ? <TypingDots />
+                : <BotText text={streamText} />
+              }
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Input bar */}
+      <View style={[S.inputWrap, { paddingBottom: insets.bottom + 76 }]}>
+        <View style={S.inputRow}>
           <TextInput
-            ref={inputRef}
-            style={styles.input}
+            style={S.input}
             placeholder="Ask anything…"
             placeholderTextColor="#94A3B8"
-            value={inputText}
-            onChangeText={setInputText}
+            value={input}
+            onChangeText={setInput}
             onSubmitEditing={() => handleSend()}
             returnKeyType="send"
-            editable={!isStreaming}
+            editable={!streaming}
             multiline
           />
           <TouchableOpacity
-            style={[styles.sendBtn, (!inputText.trim() || isStreaming) && styles.sendBtnOff]}
+            style={[S.sendBtn, (!input.trim() || streaming) && S.sendOff]}
             onPress={() => handleSend()}
-            disabled={!inputText.trim() || isStreaming}
+            disabled={!input.trim() || streaming}
             activeOpacity={0.8}
           >
-            {isStreaming
+            {streaming
               ? <ActivityIndicator size="small" color="#94A3B8" />
-              : <Ionicons name="arrow-up" size={18} color="#fff" />
+              : <Ionicons name="arrow-up" size={17} color="#fff" />
             }
           </TouchableOpacity>
         </View>
@@ -309,115 +317,49 @@ export default function AiScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  // Header
-  header: { paddingHorizontal: 18, paddingBottom: 16 },
-  headerInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerAvatar: {
-    width: 42, height: 42, borderRadius: 13,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  headerName: { fontSize: 17, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399' },
-  statusLabel: { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
-  newBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-  },
-  newBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+// ─── Styles ──────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
+  header:   { paddingHorizontal: 18, paddingBottom: 16 },
+  hRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hLeft:    { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  hAvatar:  { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  hName:    { fontSize: 16, fontWeight: '800', color: '#fff' },
+  hStatus:  { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  hDot:     { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399' },
+  hSub:     { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
+  newBtn:   { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 13, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  newTxt:   { color: '#fff', fontSize: 13, fontWeight: '700' },
 
-  // Chips
-  chipsWrap: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', backgroundColor: '#F0F4FF' },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 20, borderWidth: 1, borderColor: '#DBEAFE',
-  },
-  chipEmoji: { fontSize: 14 },
-  chipLabel: { fontSize: 12, fontWeight: '700', color: '#1E3A8A' },
+  chip:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#fff', paddingHorizontal: 11, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#DBEAFE' },
+  chipTxt:  { fontSize: 12, fontWeight: '700', color: '#1E3A8A' },
 
-  // Message rows
-  rowWrap: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12, gap: 8 },
-  rowUser: { justifyContent: 'flex-end' },
-  rowBot:  { justifyContent: 'flex-start' },
-  avatar: {
-    width: 28, height: 28, borderRadius: 9,
-    backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 2,
-  },
+  row:      { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10, gap: 7 },
+  rowL:     { justifyContent: 'flex-start' },
+  rowR:     { justifyContent: 'flex-end' },
+  ava:      { width: 26, height: 26, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
 
-  // Bubbles
-  bubble: { maxWidth: '80%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  bubbleUser: {
-    backgroundColor: '#2563EB',
-    borderBottomRightRadius: 4,
-  },
-  bubbleBot: {
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
-    shadowColor: '#1E3A8A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#EEF2FF',
-  },
+  bubble:   { maxWidth: '82%', borderRadius: 16, paddingHorizontal: 13, paddingVertical: 9 },
+  bubU:     { backgroundColor: '#2563EB', borderBottomRightRadius: 3 },
+  bubB:     { backgroundColor: '#fff', borderBottomLeftRadius: 3, elevation: 2, shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, borderWidth: 1, borderColor: '#E8EEFF' },
 
-  // Text
-  userText: { fontSize: 15, color: '#fff', fontWeight: '500', lineHeight: 22 },
-  botText:  { fontSize: 15, color: '#1E293B', fontWeight: '500', lineHeight: 22, flex: 1 },
-  botHeader: { fontWeight: '800', color: '#0F172A', marginBottom: 2 },
-  botBulletText: { color: '#334155' },
-  bullet: {
-    width: 5, height: 5, borderRadius: 2.5,
-    backgroundColor: '#2563EB', marginTop: 9, marginRight: 7,
-  },
-  cursor: { color: '#2563EB', fontSize: 15, fontWeight: '800', marginTop: 2 },
+  uTxt:     { fontSize: 15, color: '#fff', fontWeight: '500', lineHeight: 21 },
+  lineRow:  { flexDirection: 'row', alignItems: 'flex-start' },
+  dot:      { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#2563EB', marginTop: 8, marginRight: 7 },
+  botTxt:   { fontSize: 15, color: '#1E293B', fontWeight: '500', lineHeight: 22, flex: 1 },
+  botHead:  { fontWeight: '800', color: '#0F172A' },
 
-  // Typing dots
-  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
-  dot1: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#93C5FD' },
-  dot2: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#60A5FA' },
-  dot3: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#3B82F6' },
+  dotsRow:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3 },
+  dot1:     { width: 8, height: 8, borderRadius: 4, backgroundColor: '#BFDBFE' },
+  dot2:     { width: 8, height: 8, borderRadius: 4, backgroundColor: '#93C5FD' },
+  dot3:     { width: 8, height: 8, borderRadius: 4, backgroundColor: '#60A5FA' },
 
-  // Context actions
-  ctxRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  ctxBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 12, borderWidth: 1, borderColor: '#BFDBFE',
-  },
-  ctxBtnText: { fontSize: 11, fontWeight: '700', color: '#2563EB' },
+  actRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  actBtn:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE' },
+  actTxt:   { fontSize: 11, fontWeight: '700', color: '#2563EB' },
 
-  // Input bar
-  inputWrap: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 14, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: '#E2E8F0',
-  },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    backgroundColor: '#F1F5F9', borderRadius: 24,
-    borderWidth: 1, borderColor: '#E2E8F0',
-    paddingLeft: 16, paddingRight: 5, paddingVertical: 5,
-  },
-  input: {
-    flex: 1, fontSize: 15, color: '#0F172A',
-    maxHeight: 100, paddingTop: Platform.OS === 'ios' ? 8 : 4,
-    paddingBottom: Platform.OS === 'ios' ? 8 : 4,
-  },
-  sendBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#2563EB',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 2,
-  },
-  sendBtnOff: { backgroundColor: '#CBD5E1' },
+  inputWrap: { backgroundColor: '#fff', paddingHorizontal: 12, paddingTop: 9, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  inputRow:  { flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#F1F5F9', borderRadius: 22, borderWidth: 1, borderColor: '#DDE3F0', paddingLeft: 14, paddingRight: 4, paddingVertical: 4 },
+  input:     { flex: 1, fontSize: 15, color: '#0F172A', maxHeight: 90, paddingTop: 7, paddingBottom: 7 },
+  sendBtn:   { width: 34, height: 34, borderRadius: 17, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', marginBottom: 1 },
+  sendOff:   { backgroundColor: '#CBD5E1' },
 });
