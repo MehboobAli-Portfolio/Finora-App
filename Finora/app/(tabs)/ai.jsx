@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Platform, Keyboard, StyleSheet, ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -137,30 +138,16 @@ export default function AiScreen() {
     { id: '1', role: 'bot', text: greeting, intent: 'welcome' },
   ]);
   const [inputText, setInputText]           = useState('');
-  const [isStreaming, setIsStreaming]        = useState(false);  // true while SSE is open
-  const [streamingMsgId, setStreamingMsgId] = useState(null);   // id of the bubble being typed
+  const [isStreaming, setIsStreaming]        = useState(false);
+  const [streamingMsgId, setStreamingMsgId] = useState(null);
   const [conversationId, setConversationId] = useState(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const scrollViewRef  = useRef(null);
-  const abortStreamRef = useRef(null);   // holds the abort() fn for the active stream
+  const abortStreamRef = useRef(null);
 
-  // ── Keyboard height tracking ──────────────────────────────────────────────
+  // Abort active stream on unmount
   useEffect(() => {
-    const show = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => setKeyboardHeight(e.endCoordinates.height),
-    );
-    const hide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardHeight(0),
-    );
-    // Abort any active stream when screen unmounts
-    return () => {
-      show.remove();
-      hide.remove();
-      abortStreamRef.current?.();
-    };
+    return () => abortStreamRef.current?.();
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -186,8 +173,11 @@ export default function AiScreen() {
     setIsStreaming(true);
     scrollToBottom();
 
-    // ── Stream ──────────────────────────────────────────────────────────
-    const abort = await aiAPI.chatStream(
+    // ── Stream (typewriter effect) ───────────────────────────────────────
+    let abortFn = () => {};
+    abortStreamRef.current = () => abortFn();
+
+    const returnedAbort = await aiAPI.chatStream(
       text,
       conversationId,
 
@@ -233,7 +223,8 @@ export default function AiScreen() {
       },
     );
 
-    abortStreamRef.current = abort;
+    // Wire the real abort function once it's available
+    if (returnedAbort) abortFn = returnedAbort;
   };
 
   // ── Reset conversation ────────────────────────────────────────────────────
@@ -251,7 +242,11 @@ export default function AiScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: '#F8FAFC' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
       {/* ── Header ── */}
       <LinearGradient
         colors={['#1E3A8A', '#2563EB']}
@@ -310,94 +305,86 @@ export default function AiScreen() {
       )}
 
       {/* ── Chat messages ── */}
-      <View style={{ flex: 1, marginBottom: keyboardHeight > 0 ? keyboardHeight - 50 : 0 }}>
-        <ScrollView
-          ref={scrollViewRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 90 }}
-          onContentSizeChange={scrollToBottom}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {messages.map((msg) => (
-            <View
-              key={msg.id}
-              style={[styles.messageRow, msg.role === 'user' ? styles.userRow : styles.botRow]}
-            >
-              {msg.role === 'bot' && (
-                <View style={styles.botMiniAvatar}>
-                  <Ionicons name="sparkles" size={14} color="#2563EB" />
-                </View>
-              )}
-              <View
-                style={[
-                  styles.messageBubble,
-                  msg.role === 'user' ? styles.userBubble : styles.botBubble,
-                ]}
-              >
-                {/* Empty streaming bubble shows a typing indicator */}
-                {msg.role === 'bot' && msg.text === '' && msg.id === streamingMsgId ? (
-                  <View style={styles.typingRow}>
-                    <ActivityIndicator size="small" color="#2563EB" />
-                    <Text style={styles.typingText}>Analysing…</Text>
-                  </View>
-                ) : (
-                  <FormattedMessage
-                    text={msg.text}
-                    role={msg.role}
-                    isStreaming={msg.id === streamingMsgId && isStreaming}
-                  />
-                )}
-                {/* Context action buttons — shown only when streaming is done */}
-                {msg.role === 'bot' &&
-                  msg.intent &&
-                  msg.intent !== 'welcome' &&
-                  msg.id !== streamingMsgId && (
-                    <ContextActions intent={msg.intent} text={msg.text} />
-                  )}
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
+        onContentSizeChange={scrollToBottom}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
+        {messages.map((msg) => (
+          <View
+            key={msg.id}
+            style={[styles.messageRow, msg.role === 'user' ? styles.userRow : styles.botRow]}
+          >
+            {msg.role === 'bot' && (
+              <View style={styles.botMiniAvatar}>
+                <Ionicons name="sparkles" size={14} color="#2563EB" />
               </View>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* ── Input bar ── */}
-        <View
-          style={[
-            styles.inputContainer,
-            { paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 85 },
-          ]}
-        >
-          <View style={styles.inputPill}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ask anything about your money, goals, or market…"
-              placeholderTextColor="#94A3B8"
-              value={inputText}
-              onChangeText={setInputText}
-              onSubmitEditing={() => handleSend()}
-              returnKeyType="send"
-              multiline={false}
-              editable={!isStreaming}
-            />
-            <TouchableOpacity
-              onPress={() => handleSend()}
-              disabled={isStreaming || !inputText.trim()}
+            )}
+            <View
               style={[
-                styles.sendBtn,
-                { backgroundColor: !isStreaming && inputText.trim() ? '#2563EB' : '#E2E8F0' },
+                styles.messageBubble,
+                msg.role === 'user' ? styles.userBubble : styles.botBubble,
               ]}
-              activeOpacity={0.8}
             >
-              {isStreaming ? (
-                <ActivityIndicator size="small" color="#94A3B8" />
+              {msg.role === 'bot' && msg.text === '' && msg.id === streamingMsgId ? (
+                <View style={styles.typingRow}>
+                  <ActivityIndicator size="small" color="#2563EB" />
+                  <Text style={styles.typingText}>Analysing…</Text>
+                </View>
               ) : (
-                <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+                <FormattedMessage
+                  text={msg.text}
+                  role={msg.role}
+                  isStreaming={msg.id === streamingMsgId && isStreaming}
+                />
               )}
-            </TouchableOpacity>
+              {msg.role === 'bot' &&
+                msg.intent &&
+                msg.intent !== 'welcome' &&
+                msg.id !== streamingMsgId && (
+                  <ContextActions intent={msg.intent} text={msg.text} />
+                )}
+            </View>
           </View>
+        ))}
+      </ScrollView>
+
+      {/* ── Input bar — sits directly above the keyboard ── */}
+      <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 80 }]}>
+        <View style={styles.inputPill}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Ask anything about your money, goals, or market…"
+            placeholderTextColor="#94A3B8"
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmitEditing={() => handleSend()}
+            returnKeyType="send"
+            multiline={false}
+            editable={!isStreaming}
+          />
+          <TouchableOpacity
+            onPress={() => handleSend()}
+            disabled={isStreaming || !inputText.trim()}
+            style={[
+              styles.sendBtn,
+              { backgroundColor: !isStreaming && inputText.trim() ? '#2563EB' : '#E2E8F0' },
+            ]}
+            activeOpacity={0.8}
+          >
+            {isStreaming ? (
+              <ActivityIndicator size="small" color="#94A3B8" />
+            ) : (
+              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -644,7 +631,8 @@ const styles = StyleSheet.create({
   inputContainer: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
   },

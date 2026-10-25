@@ -403,8 +403,10 @@ export default function SalaryRealityScreen() {
       <KeyboardAwareScrollView
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
-        extraScrollHeight={160}
+        extraScrollHeight={220}
+        enableResetScrollToCoords={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 220, paddingTop: 140 }}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Financial Context</Text>
