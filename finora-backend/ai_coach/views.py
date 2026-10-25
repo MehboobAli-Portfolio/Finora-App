@@ -52,6 +52,8 @@ def _build_ai_engine(
 ):
     """Build a FinoraAI engine loaded with the user's current financial data."""
     month_start = _get_month_start()
+
+    # Run income + expense aggregation in one query
     aggregates = Transaction.objects.filter(user=user).aggregate(
         monthly_expenses=Sum(
             Case(
@@ -70,9 +72,11 @@ def _build_ai_engine(
     total_income  = aggregates['monthly_income']   or 0
     balance       = float(total_income) - float(expense_only)
 
-    goals_count   = Goal.objects.filter(user=user).count()
-    completed     = Goal.objects.filter(user=user, status='completed').count()
-    active_goals  = list(Goal.objects.filter(user=user, status='active'))
+    # Goals in one query (count + completed + active list)
+    all_goals     = list(Goal.objects.filter(user=user).only('status', 'name', 'target_amount', 'current_amount'))
+    goals_count   = len(all_goals)
+    completed     = sum(1 for g in all_goals if g.status == 'completed')
+    active_goals  = [g for g in all_goals if g.status == 'active']
 
     spending_by_category = []
     if include_categories:

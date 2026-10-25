@@ -89,6 +89,11 @@ function ContextActions({ intent, text }) {
 // ─── Single message bubble ────────────────────────────────────────────────────
 function MessageBubble({ msg, isStreamingThis }) {
   const isUser = msg.role === 'user';
+
+  // Don't render the bot bubble at all until it has content OR is the active
+  // streaming bubble — this eliminates the white vertical bar completely
+  if (!isUser && msg.text === '' && !isStreamingThis) return null;
+
   return (
     <View style={[styles.rowWrap, isUser ? styles.rowUser : styles.rowBot]}>
       {!isUser && (
@@ -99,7 +104,8 @@ function MessageBubble({ msg, isStreamingThis }) {
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}>
         {isUser ? (
           <Text style={styles.userText}>{msg.text}</Text>
-        ) : msg.text === '' && isStreamingThis ? (
+        ) : msg.text === '' ? (
+          // Three animated dots — shown while waiting for first token
           <View style={styles.typingRow}>
             <View style={styles.dot1} />
             <View style={styles.dot2} />
@@ -149,33 +155,36 @@ export default function AiScreen() {
     const userMsgId = `u-${Date.now()}`;
     const botMsgId  = `b-${Date.now()}`;
 
+    // Add user bubble + empty bot bubble (shows dots immediately)
     setMessages(p => [
       ...p,
       { id: userMsgId, role: 'user', text },
       { id: botMsgId,  role: 'bot',  text: '', intent: null },
     ]);
     setInputText('');
-    setStreamingId(botMsgId);
+    setStreamingId(botMsgId);  // set BEFORE chatStream so dots render right away
     setIsStreaming(true);
     scrollDown();
 
     let abortFn = () => {};
-    abortRef.current = () => abortFn();
+    abortRef.current = () => { abortFn(); };
 
     const returned = await aiAPI.chatStream(
       text,
       conversationId,
+      // onToken — each word arrives here after the server responds
       (token) => {
         setMessages(p => p.map(m => m.id === botMsgId ? { ...m, text: m.text + token } : m));
-        scrollDown();
       },
-      ({ intent, entities, conversation_id }) => {
+      // onDone
+      ({ intent, conversation_id }) => {
         if (conversation_id && !conversationId) setConvId(conversation_id);
         setMessages(p => p.map(m => m.id === botMsgId ? { ...m, intent } : m));
         setIsStreaming(false);
         setStreamingId(null);
         scrollDown();
       },
+      // onError
       () => {
         setMessages(p => p.map(m =>
           m.id === botMsgId

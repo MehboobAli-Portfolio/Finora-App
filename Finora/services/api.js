@@ -206,20 +206,20 @@ export const aiAPI = {
       const payload = { message };
       if (conversationId) payload.conversation_id = conversationId;
 
-      // Use the regular JSON endpoint — same response, just without real SSE
+      // POST to JSON endpoint — dots show while waiting, typewriter starts on response
       const response = await api.post('ai/chat/', payload);
       const { reply, intent, entities, conversation_id } = response.data;
 
       if (cancelled) return;
 
-      // Simulate typewriter — emit each word with a small delay
+      // Typewriter: emit 3 words per tick at 22ms — feels fast, ~135 words/sec visible
       const words = reply.split(' ');
-      for (let i = 0; i < words.length; i++) {
+      const BATCH = 3;
+      for (let i = 0; i < words.length; i += BATCH) {
         if (cancelled) return;
-        const token = i < words.length - 1 ? words[i] + ' ' : words[i];
-        onToken(token);
-        // Small delay between words creates the streaming feel (8ms ≈ ~125 words/sec)
-        await new Promise((resolve) => setTimeout(resolve, 8));
+        const chunk = words.slice(i, i + BATCH).join(' ') + (i + BATCH < words.length ? ' ' : '');
+        onToken(chunk);
+        await new Promise((resolve) => setTimeout(resolve, 22));
       }
 
       if (!cancelled) {
@@ -234,7 +234,6 @@ export const aiAPI = {
       }
     }
 
-    // Return abort function
     return () => { cancelled = true; };
   },
   getHistory: () => api.get('ai/chat/history/'),
