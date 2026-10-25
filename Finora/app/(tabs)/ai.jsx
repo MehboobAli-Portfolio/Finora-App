@@ -1,15 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+/**
+ * AI Coach — Chat Screen
+ *
+ * State model:
+ *   messages = array of { id, from:'user'|'bot', text, intent?, typing?:true }
+ *   A message with typing:true is the live streaming bubble.
+ *   It is REPLACED (not appended) when streaming finishes, so there is
+ *   zero gap / empty-bubble flash between typewriter ending and final text showing.
+ */
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Platform,
-  KeyboardAvoidingView,
-  Keyboard,
+  View, Text, TextInput, TouchableOpacity,
+  ScrollView, StyleSheet, ActivityIndicator,
+  Platform, Keyboard, KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,312 +20,46 @@ import { router } from 'expo-router';
 import { aiAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
-const SUGGESTIONS = [
-  { id: '1', text: '💰 My Balance' },
-  { id: '2', text: '📊 Spending' },
-  { id: '3', text: '🎯 Goals' },
-  { id: '4', text: '📈 Market' },
-  { id: '5', text: '💡 50/30/20 Rule' },
-  { id: '6', text: '💳 Debt Strategy' },
+/* ─── constants ─────────────────────────────────────────────── */
+const CHIPS = [
+  { id: '1', label: '💰 My Balance',    q: 'What is my current net balance?' },
+  { id: '2', label: '📊 Spending',      q: 'Show my spending breakdown this month' },
+  { id: '3', label: '🎯 Goals',         q: 'How are my savings goals progressing?' },
+  { id: '4', label: '📈 Market',        q: 'How is the market doing today?' },
+  { id: '5', label: '💡 50/30/20 Rule', q: 'What is the 50/30/20 budgeting rule?' },
+  { id: '6', label: '💳 Debt Strategy', q: 'What is the avalanche vs snowball debt method?' },
+  { id: '7', label: '🏖️ Retirement',   q: 'How much should I save for retirement?' },
 ];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const TYPING_ID = '__typing__'; // stable id for the live bubble
 
-const SUGGESTION_QUERIES = {
-  '💰 My Balance': 'What is my current net balance?',
-  '📊 Spending': 'Show my spending breakdown this month',
-  '🎯 Goals': 'How are my savings goals progressing?',
-  '📈 Market': 'How is the market doing today?',
-  '💡 50/30/20 Rule': 'What is the 50/30/20 budgeting rule?',
-  '💳 Debt Strategy': 'What is the avalanche vs snowball debt method?',
-};
-
-export default function CoachScreen() {
-  const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const scrollRef = useRef(null);
-
-  const name = user?.full_name?.split(' ')[0] || user?.username || 'there';
-
-  // Each message: { id, from: 'user'|'bot', text }
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [convId, setConvId] = useState(null);
-  // Live text being typed out right now
-  const [liveText, setLiveText] = useState(null); // null = no streaming
-
-  const liveRef = useRef('');
-  const cancelRef = useRef(false);
-
-  useEffect(() => {
-    return () => { cancelRef.current = true; };
-  }, []);
-
-  const scrollToBottom = () => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-  };
-
-  const send = async (textToSend) => {
-    const text = (textToSend ?? input).trim();
-    if (!text || loading) return;
-    Keyboard.dismiss();
-    setInput('');
-    setLoading(true);
-    cancelRef.current = false;
-
-    // Add user message
-    const uid = `u_${Date.now()}`;
-    setMessages(prev => [...prev, { id: uid, from: 'user', text }]);
-    scrollToBottom();
-
-    try {
-      const res = await aiAPI.chat(text, convId);
-      if (cancelRef.current) return;
-
-      const { reply, intent, conversation_id } = res.data;
-      if (conversation_id && !convId) setConvId(conversation_id);
-
-      // Start typewriter
-      liveRef.current = '';
-      setLiveText('');
-      setLoading(false);
-      scrollToBottom();
-
-      const words = reply.split(' ');
-      for (let i = 0; i < words.length; i++) {
-        if (cancelRef.current) return;
-        liveRef.current += (i === 0 ? '' : ' ') + words[i];
-        setLiveText(liveRef.current);
-        // Scroll every 10 words
-        if (i % 10 === 0) scrollToBottom();
-        await sleep(18);
-      }
-
-      if (cancelRef.current) return;
-
-      // Commit to messages list
-      const bid = `b_${Date.now()}`;
-      setMessages(prev => [...prev, { id: bid, from: 'bot', text: liveRef.current, intent }]);
-      setLiveText(null);
-      liveRef.current = '';
-      scrollToBottom();
-
-    } catch (e) {
-      if (cancelRef.current) return;
-      setLoading(false);
-      setLiveText(null);
-      liveRef.current = '';
-      const bid = `err_${Date.now()}`;
-      setMessages(prev => [...prev, {
-        id: bid, from: 'bot', intent: null,
-        text: 'Could not reach the server. Make sure the backend is running and try again.',
-      }]);
-      scrollToBottom();
-    }
-  };
-
-  const reset = () => {
-    cancelRef.current = true;
-    setMessages([]);
-    setLiveText(null);
-    liveRef.current = '';
-    setLoading(false);
-    setConvId(null);
-  };
-
-  const isEmpty = messages.length === 0 && liveText === null && !loading;
-
+/* ─── helpers ───────────────────────────────────────────────── */
+function BoldText({ children }) {
+  const parts = String(children ?? '').split(/(\*\*[^*]+\*\*)/g);
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#F5F7FF' }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      {/* ── HEADER ── */}
-      <LinearGradient
-        colors={['#1E3A8A', '#2563EB']}
-        style={[st.header, { paddingTop: insets.top + 8 }]}
-      >
-        <View style={st.headerRow}>
-          <View style={st.headerLeft}>
-            <View style={st.aiIcon}>
-              <Ionicons name="sparkles" size={20} color="#2563EB" />
-            </View>
-            <View>
-              <Text style={st.headerTitle}>AI Coach</Text>
-              <View style={st.onlineRow}>
-                <View style={[st.onlineDot, (loading || liveText !== null) && { backgroundColor: '#FBBF24' }]} />
-                <Text style={st.onlineText}>
-                  {loading ? 'Thinking…' : liveText !== null ? 'Typing…' : 'Online'}
-                </Text>
-              </View>
-            </View>
-          </View>
-          <TouchableOpacity onPress={reset} style={st.newChatBtn}>
-            <Ionicons name="add-outline" size={18} color="#fff" />
-            <Text style={st.newChatText}>New</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      {/* ── EMPTY STATE / WELCOME ── */}
-      {isEmpty && (
-        <View style={st.welcomeWrap}>
-          <View style={st.welcomeIcon}>
-            <Ionicons name="sparkles" size={32} color="#2563EB" />
-          </View>
-          <Text style={st.welcomeTitle}>Hi {name}!</Text>
-          <Text style={st.welcomeSub}>
-            Ask me anything about your finances, goals, investments or market.
-          </Text>
-          {/* Suggestion chips */}
-          <View style={st.chipsGrid}>
-            {SUGGESTIONS.map(s => (
-              <TouchableOpacity
-                key={s.id}
-                style={st.chip}
-                onPress={() => send(SUGGESTION_QUERIES[s.text])}
-                activeOpacity={0.75}
-              >
-                <Text style={st.chipText}>{s.text}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+    <>
+      {parts.map((p, i) =>
+        p.startsWith('**') && p.endsWith('**')
+          ? <Text key={i} style={{ fontWeight: '800', color: '#0F172A' }}>{p.slice(2, -2)}</Text>
+          : <Text key={i}>{p}</Text>
       )}
-
-      {/* ── MESSAGES ── */}
-      {!isEmpty && (
-        <ScrollView
-          ref={scrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={st.msgList}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-        >
-          {messages.map(m => (
-            <MessageRow key={m.id} message={m} />
-          ))}
-
-          {/* Loading dots — shown while waiting for server */}
-          {loading && (
-            <View style={st.botRow}>
-              <BotAvatar />
-              <View style={[st.bubble, st.botBubble, st.dotsBubble]}>
-                <LoadingDots />
-              </View>
-            </View>
-          )}
-
-          {/* Live typewriter bubble */}
-          {liveText !== null && (
-            <View style={st.botRow}>
-              <BotAvatar />
-              <View style={[st.bubble, st.botBubble]}>
-                <Text style={st.botText}>{liveText}<Text style={st.cursor}>▌</Text></Text>
-              </View>
-            </View>
-          )}
-        </ScrollView>
-      )}
-
-      {/* ── INPUT ── */}
-      <View style={[st.inputArea, { paddingBottom: insets.bottom + 76 }]}>
-        <View style={st.inputRow}>
-          <TextInput
-            style={st.textInput}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask anything…"
-            placeholderTextColor="#9CA3AF"
-            multiline
-            returnKeyType="send"
-            onSubmitEditing={() => send()}
-            editable={!loading && liveText === null}
-          />
-          <TouchableOpacity
-            style={[st.sendBtn, (loading || liveText !== null || !input.trim()) && st.sendBtnDisabled]}
-            onPress={() => send()}
-            disabled={loading || liveText !== null || !input.trim()}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="arrow-up" size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+    </>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function BotAvatar() {
-  return (
-    <View style={st.botAvatar}>
-      <Ionicons name="sparkles" size={12} color="#2563EB" />
-    </View>
-  );
-}
-
-function LoadingDots() {
-  return (
-    <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center', paddingVertical: 2 }}>
-      <View style={[st.ldot, { backgroundColor: '#93C5FD' }]} />
-      <View style={[st.ldot, { backgroundColor: '#60A5FA' }]} />
-      <View style={[st.ldot, { backgroundColor: '#3B82F6' }]} />
-    </View>
-  );
-}
-
-function MessageRow({ message }) {
-  const isUser = message.from === 'user';
-  if (isUser) {
-    return (
-      <View style={st.userRow}>
-        <View style={[st.bubble, st.userBubble]}>
-          <Text style={st.userText}>{message.text}</Text>
-        </View>
-      </View>
-    );
-  }
-  return (
-    <View style={st.botRow}>
-      <BotAvatar />
-      <View style={{ flex: 1 }}>
-        <View style={[st.bubble, st.botBubble]}>
-          <FormattedText text={message.text} />
-        </View>
-        {message.intent && message.intent !== 'welcome' && (
-          <QuickActions intent={message.intent} text={message.text} />
-        )}
-      </View>
-    </View>
-  );
-}
-
-function FormattedText({ text }) {
+function BotBody({ text }) {
   if (!text) return null;
-  const lines = text.split('\n');
   return (
     <View>
-      {lines.map((line, i) => {
+      {text.split('\n').map((line, i) => {
         const t = line.trim();
         if (!t) return <View key={i} style={{ height: 4 }} />;
-
-        const isBullet = /^[-*•]\s/.test(t);
-        const clean = t.replace(/^[-*•]\s/, '');
-
-        // Parse **bold**
-        const parts = clean.split(/(\*\*[^*]+\*\*)/g);
-        const content = parts.map((p, j) =>
-          p.startsWith('**') && p.endsWith('**')
-            ? <Text key={j} style={{ fontWeight: '800', color: '#0F172A' }}>{p.slice(2, -2)}</Text>
-            : <Text key={j}>{p}</Text>
-        );
-
+        const bullet = /^[-*•]\s/.test(t);
+        const clean  = t.replace(/^[-*•]\s/, '');
         return (
-          <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', marginVertical: isBullet ? 1 : 0 }}>
-            {isBullet && <Text style={{ color: '#2563EB', marginRight: 6, lineHeight: 22 }}>•</Text>}
-            <Text style={st.botText}>{content}</Text>
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', marginVertical: bullet ? 1 : 0 }}>
+            {bullet && <Text style={{ color: '#2563EB', marginRight: 6, lineHeight: 22 }}>•</Text>}
+            <Text style={st.botTxt}><BoldText>{clean}</BoldText></Text>
           </View>
         );
       })}
@@ -333,138 +69,281 @@ function FormattedText({ text }) {
 
 function QuickActions({ intent, text }) {
   const lo = (text || '').toLowerCase();
-  const actions = [];
-
-  if (intent === 'check_balance' || lo.includes('balance') || lo.includes('spending')) {
-    actions.push({ label: 'View Expenses', icon: 'receipt-outline', route: '/(tabs)/expenses' });
-  } else if (lo.includes('goal')) {
-    actions.push({ label: 'View Goals', icon: 'flag-outline', route: '/(tabs)/goals' });
-    actions.push({ label: 'New Goal', icon: 'add-circle-outline', route: '/add-goal' });
-  } else if (intent === 'market_status' || lo.includes('portfolio') || lo.includes('market')) {
-    actions.push({ label: 'Portfolio', icon: 'trending-up-outline', route: '/(tabs)/invest' });
+  const btns = [];
+  if (intent === 'check_balance' || lo.includes('balance') || lo.includes('spending'))
+    btns.push({ l: 'Expenses', i: 'receipt-outline', r: '/(tabs)/expenses' });
+  if (lo.includes('goal')) {
+    btns.push({ l: 'Goals',    i: 'flag-outline',        r: '/(tabs)/goals' });
+    btns.push({ l: '+Goal',    i: 'add-circle-outline',  r: '/add-goal' });
   }
-
-  if (!actions.length) return null;
-
+  if (intent === 'market_status' || lo.includes('market') || lo.includes('portfolio'))
+    btns.push({ l: 'Portfolio', i: 'trending-up-outline', r: '/(tabs)/invest' });
+  if (!btns.length) return null;
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6, marginLeft: 34 }}>
-      {actions.map((a, i) => (
-        <TouchableOpacity
-          key={i}
-          style={st.qaBtn}
-          onPress={() => router.push(a.route)}
-          activeOpacity={0.75}
-        >
-          <Ionicons name={a.icon} size={12} color="#2563EB" />
-          <Text style={st.qaTxt}>{a.label}</Text>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+      {btns.map((b, i) => (
+        <TouchableOpacity key={i} onPress={() => router.push(b.r)} style={st.qaBtn} activeOpacity={0.75}>
+          <Ionicons name={b.i} size={12} color="#2563EB" />
+          <Text style={st.qaTxt}>{b.l}</Text>
         </TouchableOpacity>
       ))}
     </View>
   );
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+function Dots() {
+  return (
+    <View style={{ flexDirection: 'row', gap: 5, paddingVertical: 3 }}>
+      {['#BFDBFE', '#93C5FD', '#60A5FA'].map((c, i) => (
+        <View key={i} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c }} />
+      ))}
+    </View>
+  );
+}
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+/* ─── main component ────────────────────────────────────────── */
+export default function CoachScreen() {
+  const insets    = useSafeAreaInsets();
+  const { user }  = useAuth();
+  const scrollRef = useRef(null);
+  const cancelRef = useRef(false);
+
+  const name = user?.full_name?.split(' ')[0] || user?.username || 'there';
+
+  const [msgs,    setMsgs]    = useState([]);   // array of message objects
+  const [input,   setInput]   = useState('');
+  const [busy,    setBusy]    = useState(false); // true while waiting for server
+  const [convId,  setConvId]  = useState(null);
+
+  useEffect(() => () => { cancelRef.current = true; }, []);
+
+  const scrollDown = useCallback(() => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  }, []);
+
+  /* ── send ─────────────────────────────────────────────────── */
+  const send = async (manual) => {
+    const text = (manual ?? input).trim();
+    if (!text || busy) return;
+    Keyboard.dismiss();
+    setInput('');
+    setBusy(true);
+    cancelRef.current = false;
+
+    // 1. Append user bubble + typing placeholder in ONE update
+    setMsgs(prev => [
+      ...prev,
+      { id: `u${Date.now()}`, from: 'user', text },
+      { id: TYPING_ID, from: 'bot', text: '', typing: true }, // dots
+    ]);
+    scrollDown();
+
+    try {
+      const res = await aiAPI.chat(text, convId);
+      if (cancelRef.current) return;
+
+      const { reply, intent, conversation_id } = res.data;
+      if (conversation_id && !convId) setConvId(conversation_id);
+      setBusy(false);
+
+      // 2. Typewriter — REPLACE the typing bubble in-place every tick
+      //    No bubble ever disappears; it just grows. Zero gap.
+      const words = reply.split(' ');
+      let built = '';
+      for (let i = 0; i < words.length; i++) {
+        if (cancelRef.current) return;
+        built += (i === 0 ? '' : ' ') + words[i];
+        const snap = built; // capture for closure
+        setMsgs(prev => prev.map(m =>
+          m.id === TYPING_ID ? { ...m, text: snap, typing: true } : m
+        ));
+        if (i % 8 === 0) scrollDown();
+        await sleep(18);
+      }
+
+      if (cancelRef.current) return;
+
+      // 3. Finalise — replace typing:true with typing:false (keeps text, shows actions)
+      const finalText = built;
+      setMsgs(prev => prev.map(m =>
+        m.id === TYPING_ID
+          ? { id: `b${Date.now()}`, from: 'bot', text: finalText, intent, typing: false }
+          : m
+      ));
+      scrollDown();
+
+    } catch {
+      if (cancelRef.current) return;
+      setBusy(false);
+      setMsgs(prev => prev.map(m =>
+        m.id === TYPING_ID
+          ? { id: `err${Date.now()}`, from: 'bot', typing: false, intent: null,
+              text: 'Could not reach the server. Make sure the backend is running.' }
+          : m
+      ));
+    }
+  };
+
+  const reset = () => {
+    cancelRef.current = true;
+    setMsgs([]);
+    setBusy(false);
+    setConvId(null);
+  };
+
+  const showWelcome = msgs.length === 0 && !busy;
+
+  /* ── render ───────────────────────────────────────────────── */
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: '#F5F7FF' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      {/* Header */}
+      <LinearGradient colors={['#1E3A8A', '#2563EB']}
+        style={[st.header, { paddingTop: insets.top + 8 }]}>
+        <View style={st.hRow}>
+          <View style={st.hLeft}>
+            <View style={st.hIcon}>
+              <Ionicons name="sparkles" size={20} color="#2563EB" />
+            </View>
+            <View>
+              <Text style={st.hTitle}>AI Coach</Text>
+              <View style={st.hStatus}>
+                <View style={[st.hDot, busy && { backgroundColor: '#FBBF24' }]} />
+                <Text style={st.hSub}>{busy ? 'Thinking…' : 'Online'}</Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity onPress={reset} style={st.newBtn} activeOpacity={0.75}>
+            <Ionicons name="add-outline" size={17} color="#fff" />
+            <Text style={st.newTxt}>New</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      {/* Welcome state */}
+      {showWelcome && (
+        <View style={st.welcome}>
+          <View style={st.wIcon}><Ionicons name="sparkles" size={30} color="#2563EB" /></View>
+          <Text style={st.wTitle}>Hi {name}!</Text>
+          <Text style={st.wSub}>Ask me about your finances, goals, market, or any money question.</Text>
+          <View style={st.wChips}>
+            {CHIPS.map(c => (
+              <TouchableOpacity key={c.id} style={st.chip} onPress={() => send(c.q)} activeOpacity={0.75}>
+                <Text style={st.chipTxt}>{c.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Chat list */}
+      {!showWelcome && (
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 14, paddingBottom: 8 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          {msgs.map(m => {
+            if (m.from === 'user') {
+              return (
+                <View key={m.id} style={st.uRow}>
+                  <View style={st.uBubble}>
+                    <Text style={st.uTxt}>{m.text}</Text>
+                  </View>
+                </View>
+              );
+            }
+            // Bot bubble — typing or done
+            return (
+              <View key={m.id} style={st.bRow}>
+                <View style={st.bAva}><Ionicons name="sparkles" size={11} color="#2563EB" /></View>
+                <View style={st.bBubble}>
+                  {m.typing && m.text === ''
+                    ? <Dots />
+                    : <BotBody text={m.text} />
+                  }
+                  {!m.typing && m.intent && m.intent !== 'welcome' && (
+                    <QuickActions intent={m.intent} text={m.text} />
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Input */}
+      <View style={[st.inputWrap, { paddingBottom: insets.bottom + 76 }]}>
+        <View style={st.inputRow}>
+          <TextInput
+            style={st.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask anything…"
+            placeholderTextColor="#9CA3AF"
+            multiline
+            returnKeyType="send"
+            onSubmitEditing={() => send()}
+            editable={!busy}
+          />
+          <TouchableOpacity
+            style={[st.sendBtn, (busy || !input.trim()) && st.sendOff]}
+            onPress={() => send()}
+            disabled={busy || !input.trim()}
+            activeOpacity={0.8}
+          >
+            {busy
+              ? <ActivityIndicator size="small" color="#94A3B8" />
+              : <Ionicons name="arrow-up" size={17} color="#fff" />
+            }
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+/* ─── styles ─────────────────────────────────────────────────── */
 const st = StyleSheet.create({
-  // Header
-  header: { paddingHorizontal: 20, paddingBottom: 16 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  aiIcon: {
-    width: 44, height: 44, borderRadius: 14,
-    backgroundColor: '#fff',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 3,
-  },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399' },
-  onlineText: { fontSize: 11, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
-  newChatBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-  },
-  newChatText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  header:  { paddingHorizontal: 20, paddingBottom: 16 },
+  hRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  hLeft:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  hIcon:   { width: 44, height: 44, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 2 },
+  hTitle:  { fontSize: 18, fontWeight: '800', color: '#fff' },
+  hStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  hDot:    { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399' },
+  hSub:    { fontSize: 11, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  newBtn:  { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  newTxt:  { color: '#fff', fontSize: 13, fontWeight: '700' },
 
-  // Welcome
-  welcomeWrap: { flex: 1, paddingHorizontal: 24, paddingTop: 40, alignItems: 'center' },
-  welcomeIcon: {
-    width: 72, height: 72, borderRadius: 22,
-    backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#DBEAFE',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
-  },
-  welcomeTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
-  welcomeSub: { fontSize: 15, color: '#64748B', textAlign: 'center', lineHeight: 22, marginBottom: 28 },
-  chipsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
-  chip: {
-    backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 20, borderWidth: 1, borderColor: '#DBEAFE',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
-  },
-  chipText: { fontSize: 13, fontWeight: '700', color: '#1E40AF' },
+  welcome: { flex: 1, paddingHorizontal: 24, paddingTop: 44, alignItems: 'center' },
+  wIcon:   { width: 70, height: 70, borderRadius: 22, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  wTitle:  { fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
+  wSub:    { fontSize: 15, color: '#64748B', textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  wChips:  { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  chip:    { backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#DBEAFE', elevation: 1 },
+  chipTxt: { fontSize: 13, fontWeight: '700', color: '#1E40AF' },
 
-  // Messages
-  msgList: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 },
-  userRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 },
-  botRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
-  botAvatar: {
-    width: 26, height: 26, borderRadius: 8,
-    backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE',
-    justifyContent: 'center', alignItems: 'center',
-    marginTop: 2, flexShrink: 0,
-  },
+  uRow:    { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 },
+  uBubble: { backgroundColor: '#2563EB', borderRadius: 16, borderBottomRightRadius: 4, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '82%' },
+  uTxt:    { color: '#fff', fontSize: 15, fontWeight: '500', lineHeight: 21 },
 
-  // Bubbles
-  bubble: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '85%' },
-  userBubble: { backgroundColor: '#2563EB', borderBottomRightRadius: 4, alignSelf: 'flex-end' },
-  botBubble: {
-    backgroundColor: '#fff', borderBottomLeftRadius: 4,
-    shadowColor: '#94A3B8', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12, shadowRadius: 4, elevation: 2,
-  },
-  dotsBubble: { paddingVertical: 12 },
+  bRow:    { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
+  bAva:    { width: 26, height: 26, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', justifyContent: 'center', alignItems: 'center', marginTop: 2, flexShrink: 0 },
+  bBubble: { backgroundColor: '#fff', borderRadius: 16, borderBottomLeftRadius: 4, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '82%', elevation: 2, shadowColor: '#94A3B8', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  botTxt:  { color: '#1E293B', fontSize: 15, fontWeight: '500', lineHeight: 22, flexShrink: 1 },
 
-  // Text
-  userText: { color: '#fff', fontSize: 15, fontWeight: '500', lineHeight: 21 },
-  botText: { color: '#1E293B', fontSize: 15, fontWeight: '500', lineHeight: 22, flexShrink: 1 },
-  cursor: { color: '#2563EB', fontWeight: '800' },
+  qaBtn:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE' },
+  qaTxt:   { fontSize: 11, fontWeight: '700', color: '#2563EB' },
 
-  // Loading dot
-  ldot: { width: 8, height: 8, borderRadius: 4 },
-
-  // Quick actions
-  qaBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE',
-  },
-  qaTxt: { fontSize: 11, fontWeight: '700', color: '#2563EB' },
-
-  // Input
-  inputArea: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 12, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: '#E2E8F0',
-  },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    backgroundColor: '#F8FAFC', borderRadius: 24,
-    borderWidth: 1.5, borderColor: '#E2E8F0',
-    paddingLeft: 14, paddingRight: 4, paddingVertical: 4,
-  },
-  textInput: {
-    flex: 1, fontSize: 15, color: '#0F172A',
-    maxHeight: 100, paddingTop: 8, paddingBottom: 8,
-  },
-  sendBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#2563EB',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 2,
-  },
-  sendBtnDisabled: { backgroundColor: '#CBD5E1' },
+  inputWrap: { backgroundColor: '#fff', paddingHorizontal: 12, paddingTop: 9, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  inputRow:  { flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#F8FAFC', borderRadius: 24, borderWidth: 1.5, borderColor: '#E2E8F0', paddingLeft: 14, paddingRight: 4, paddingVertical: 4 },
+  input:     { flex: 1, fontSize: 15, color: '#0F172A', maxHeight: 100, paddingTop: 8, paddingBottom: 8 },
+  sendBtn:   { width: 36, height: 36, borderRadius: 18, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
+  sendOff:   { backgroundColor: '#CBD5E1' },
 });
