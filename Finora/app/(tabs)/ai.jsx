@@ -12,6 +12,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   ScrollView, StyleSheet, ActivityIndicator,
   Platform, Keyboard, KeyboardAvoidingView,
+  Modal, FlatList
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -114,8 +115,26 @@ export default function CoachScreen() {
   const [input,   setInput]   = useState('');
   const [busy,    setBusy]    = useState(false); // true while waiting for server
   const [convId,  setConvId]  = useState(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [historyList, setHistoryList] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  useEffect(() => () => { cancelRef.current = true; }, []);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setIsKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setIsKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      cancelRef.current = true;
+    };
+  }, []);
 
   const scrollDown = useCallback(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
@@ -191,6 +210,34 @@ export default function CoachScreen() {
     setConvId(null);
   };
 
+  const openHistory = async () => {
+    setHistoryVisible(true);
+    setLoadingHistory(true);
+    try {
+      const res = await aiAPI.getHistory();
+      setHistoryList(res.data || []);
+    } catch (e) {
+      console.error('Failed to load history', e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const resumeConversation = (conv) => {
+    cancelRef.current = true;
+    setConvId(conv.id);
+    const mapped = (conv.messages || []).map(m => ({
+      id: m.id || `m_${Math.random()}`,
+      from: m.role === 'assistant' ? 'bot' : 'user',
+      text: m.content,
+      intent: m.intent,
+      typing: false,
+    }));
+    setMsgs(mapped);
+    setHistoryVisible(false);
+    scrollDown();
+  };
+
   const showWelcome = msgs.length === 0 && !busy;
 
   /* ── render ───────────────────────────────────────────────── */
@@ -215,10 +262,16 @@ export default function CoachScreen() {
               </View>
             </View>
           </View>
-          <TouchableOpacity onPress={reset} style={st.newBtn} activeOpacity={0.75}>
-            <Ionicons name="add-outline" size={17} color="#fff" />
-            <Text style={st.newTxt}>New</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={openHistory} style={st.newBtn} activeOpacity={0.75}>
+              <Ionicons name="time-outline" size={17} color="#fff" />
+              <Text style={st.newTxt}>History</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={reset} style={st.newBtn} activeOpacity={0.75}>
+              <Ionicons name="add-outline" size={17} color="#fff" />
+              <Text style={st.newTxt}>New</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </LinearGradient>
 
@@ -278,7 +331,7 @@ export default function CoachScreen() {
       )}
 
       {/* Input */}
-      <View style={[st.inputWrap, { paddingBottom: insets.bottom + 76 }]}>
+      <View style={[st.inputWrap, { paddingBottom: isKeyboardVisible ? 10 : insets.bottom + 76 }]}>
         <View style={st.inputRow}>
           <TextInput
             style={st.input}
@@ -304,6 +357,63 @@ export default function CoachScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* History Modal */}
+      <Modal visible={historyVisible} transparent animationType="slide" onRequestClose={() => setHistoryVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="time-outline" size={22} color="#2563EB" />
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>Chat History</Text>
+              </View>
+              <TouchableOpacity onPress={() => setHistoryVisible(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {loadingHistory ? (
+              <ActivityIndicator size="large" color="#2563EB" style={{ marginVertical: 40 }} />
+            ) : historyList.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="chatbubbles-outline" size={44} color="#CBD5E1" />
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748B', marginTop: 12 }}>No past chats found</Text>
+                <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 4 }}>Ask a question to start your first session!</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={historyList}
+                keyExtractor={item => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => resumeConversation(item)}
+                    style={[{ backgroundColor: item.id === convId ? '#EFF6FF' : '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: item.id === convId ? '#BFDBFE' : '#F1F5F9' }]}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', flex: 1 }} numberOfLines={1}>
+                        {item.title || 'Conversation'}
+                      </Text>
+                      {item.id === convId && (
+                        <View style={{ backgroundColor: '#2563EB', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>Active</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, color: '#64748B' }}>
+                        {item.messages?.length || 0} message{(item.messages?.length || 0) === 1 ? '' : 's'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94A3B8' }}>
+                        {item.last_active ? new Date(item.last_active).toLocaleDateString() : ''}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
