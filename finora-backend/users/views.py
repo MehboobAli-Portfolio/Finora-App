@@ -1,4 +1,5 @@
-﻿from rest_framework import generics, status
+from rest_framework import generics, status
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -47,6 +48,7 @@ class RegisterView(generics.CreateAPIView):
 class ProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = UserSerializer
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_object(self):
         return self.request.user
@@ -223,3 +225,32 @@ def logout_view(request):
     except Exception:
         pass
     return Response({'message': 'Logged out successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    """
+    POST /api/auth/change-password/
+    Payload: { "old_password": "...", "new_password": "...", "confirm_password": "..." }
+    """
+    user = request.user
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
+
+    if not old_password or not new_password:
+        return Response({'error': 'Current and new password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not user.check_password(old_password):
+        return Response({'error': 'Current password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if new_password != confirm_password:
+        return Response({'error': 'New passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < 6:
+        return Response({'error': 'Password must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(new_password)
+    user.save()
+    return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)

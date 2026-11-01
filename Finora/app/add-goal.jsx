@@ -9,6 +9,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getCurrencySymbol } from '../utils/currency';
 
 const GOAL_TYPES = [{
   id: 'savings',
@@ -58,6 +60,7 @@ const GOAL_TYPES = [{
 }];
 
 export default function AddGoalScreen() {
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [goalType, setGoalType] = useState('savings');
   const [targetAmount, setTargetAmount] = useState('');
@@ -122,7 +125,7 @@ export default function AddGoalScreen() {
           <View style={{backgroundColor: '#FFFFFF',borderRadius: 16,padding: 20,marginBottom: 20,alignItems: 'center',shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 8,elevation: 3}}>
             <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '700',textTransform: 'uppercase',letterSpacing: 0.5,marginBottom: 8}}>Target Amount</Text>
             <View style={{flexDirection: 'row',alignItems: 'center'}}>
-              <Text style={{fontSize: 32,fontWeight: '800',color: '#2563EB',marginRight: 4}}>$</Text>
+              <Text style={{fontSize: 32,fontWeight: '800',color: '#2563EB',marginRight: 4}}>{getCurrencySymbol(user?.currency)}</Text>
               <TextInput
                 style={{fontSize: 48,fontWeight: '800',color: '#111827',minWidth: 120}}
                 value={targetAmount}

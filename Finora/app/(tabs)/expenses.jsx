@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { expensesAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { CartesianChart, Bar } from 'victory-native';
 import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
@@ -47,12 +48,10 @@ const CATEGORY_COLORS = {
 
 const FILTERS = ['All', 'income', 'expense'];
 
-const fmt = amount => `$${parseFloat(amount || 0).toLocaleString('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-})}`;
+import { formatCurrency } from '../../utils/currency';
 
 export default function ExpensesScreen() {
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -140,11 +139,11 @@ export default function ExpensesScreen() {
       <View style={{flexDirection: 'row',margin: 16,gap: 12}}>
         <View style={[{flex: 1,backgroundColor: '#FFFFFF',borderRadius: 14,padding: 14,borderLeftWidth: 4,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 6,elevation: 3}, { borderLeftColor: '#10B981' }]}>
           <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '600',marginBottom: 4,textTransform: 'uppercase'}}>Income</Text>
-          <Text style={[{fontSize: 18,fontWeight: '800'}, { color: '#10B981' }]}>{fmt(totalIncome)}</Text>
+          <Text style={[{fontSize: 18,fontWeight: '800'}, { color: '#10B981' }]}>{formatCurrency(totalIncome, user?.currency)}</Text>
         </View>
         <View style={[{flex: 1,backgroundColor: '#FFFFFF',borderRadius: 14,padding: 14,borderLeftWidth: 4,shadowColor: '#000',shadowOffset: {width: 0,height: 2},shadowOpacity: 0.06,shadowRadius: 6,elevation: 3}, { borderLeftColor: '#EF4444' }]}>
           <Text style={{fontSize: 12,color: '#9CA3AF',fontWeight: '600',marginBottom: 4,textTransform: 'uppercase'}}>Expenses</Text>
-          <Text style={[{fontSize: 18,fontWeight: '800'}, { color: '#EF4444' }]}>{fmt(totalExpense)}</Text>
+          <Text style={[{fontSize: 18,fontWeight: '800'}, { color: '#EF4444' }]}>{formatCurrency(totalExpense, user?.currency)}</Text>
         </View>
       </View>
 
@@ -251,6 +250,7 @@ export default function ExpensesScreen() {
                 exp={exp} 
                 onDelete={() => handleDelete(exp.id)} 
                 onEdit={() => handleEdit(exp)}
+                currency={user?.currency}
               />
             ))
           )}
@@ -288,7 +288,8 @@ export default function ExpensesScreen() {
 function ExpenseCard({
   exp,
   onDelete,
-  onEdit
+  onEdit,
+  currency
 }) {
   const isIncome = exp.txn_type === 'income';
   const icon = CATEGORY_ICONS[exp.category] || 'ellipsis-horizontal';
@@ -308,7 +309,7 @@ function ExpenseCard({
       </View>
       <View style={{alignItems: 'flex-end',gap: 6}}>
         <Text style={[{fontSize: 14,fontWeight: '700'}, { color: isIncome ? '#10B981' : '#EF4444' }]}>
-          {isIncome ? '+' : '-'}{fmt(exp.amount)}
+          {isIncome ? '+' : '-'}{formatCurrency(exp.amount, currency)}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={onDelete} style={{padding: 4}}>

@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
@@ -128,7 +128,11 @@ export const authAPI = {
   register: (data) => api.post('auth/register/', data),
   login: (data) => api.post('auth/login/', data),
   getProfile: () => api.get('auth/profile/'),
-  updateProfile: (data) => api.patch('auth/profile/', data),
+  updateProfile: (data) => {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    return api.patch('auth/profile/', data, isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined);
+  },
+  changePassword: (data) => api.post('auth/change-password/', data),
   getDashboard: () => api.get('auth/dashboard/'),
   getDashboardInsight: () => api.get('ai/insight/'),
   chat: (data) => api.post('ai/chat/', data),
@@ -157,6 +161,8 @@ export const goalsAPI = {
   create: (data) => api.post('goals/', data),
   update: (id, data) => api.put(`goals/${id}/`, data),
   delete: (id) => api.delete(`goals/${id}/`),
+  addDeposit: (goalId, data) => api.post(`goals/${goalId}/deposits/`, data),
+  getDeposits: (goalId) => api.get(`goals/${goalId}/deposits/`),
 };
 
 // Investments

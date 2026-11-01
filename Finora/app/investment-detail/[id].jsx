@@ -7,6 +7,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { investmentsAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import { theme } from '../../theme';
 import { CartesianChart, Line } from 'victory-native';
 import { LinearGradient, vec } from '@shopify/react-native-skia';
@@ -24,6 +26,7 @@ const TYPE_META = {
 };
 
 export default function InvestmentDetailScreen() {
+  const { user } = useAuth();
   const { id } = useLocalSearchParams();
   const [holding, setHolding] = useState(null);
   const [chartData, setChartData] = useState([]);
@@ -94,7 +97,7 @@ export default function InvestmentDetailScreen() {
   const meta = TYPE_META[holding.investment_type] || TYPE_META.other;
   const accentColor = meta.color;
 
-  const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (a, opts) => formatCurrency(a, user?.currency, opts);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -246,6 +249,7 @@ export default function InvestmentDetailScreen() {
         visible={showAddUnits}
         onClose={() => setShowAddUnits(false)}
         holding={holding}
+        currency={user?.currency}
         isTracked={isTracked}
         accentColor={accentColor}
         meta={meta}
@@ -261,14 +265,15 @@ export default function InvestmentDetailScreen() {
 
 // ─── Add Units Modal ──────────────────────────────────────────────────
 
-function AddUnitsModal({ visible, onClose, holding, isTracked, accentColor, meta, onSuccess }) {
+function AddUnitsModal({ visible, onClose, holding, currency, isTracked, accentColor, meta, onSuccess }) {
   const [additionalQty, setAdditionalQty] = useState('');
   const [buyPricePerUnit, setBuyPricePerUnit] = useState('');
   const [additionalAmount, setAdditionalAmount] = useState('');
   const [newCurrentValue, setNewCurrentValue] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (a, opts) => formatCurrency(a, currency, opts);
+  const sym = getCurrencySymbol(currency).trim();
 
   // Reset fields when modal opens
   useEffect(() => {
@@ -414,7 +419,7 @@ function AddUnitsModal({ visible, onClose, holding, isTracked, accentColor, meta
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={modalStyles.label}>Buy Price / Unit ($)</Text>
+                    <Text style={modalStyles.label}>Buy Price / Unit ({sym})</Text>
                     <TextInput
                       style={modalStyles.input}
                       value={buyPricePerUnit}
@@ -431,7 +436,7 @@ function AddUnitsModal({ visible, onClose, holding, isTracked, accentColor, meta
                   <View style={{ backgroundColor: `${accentColor}08`, borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: `${accentColor}20` }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600' }}>This Purchase</Text>
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: accentColor }}>${addCost}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: accentColor }}>{formatCurrency(addCost, currency)}</Text>
                     </View>
                     <View style={{ height: 1, backgroundColor: `${accentColor}15`, marginBottom: 8 }} />
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -440,7 +445,7 @@ function AddUnitsModal({ visible, onClose, holding, isTracked, accentColor, meta
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Text style={{ fontSize: 12, color: '#6B7280' }}>New Avg Price</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827' }}>${newAvgPrice}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#111827' }}>{formatCurrency(newAvgPrice, currency)}</Text>
                     </View>
                   </View>
                 )}
@@ -448,7 +453,7 @@ function AddUnitsModal({ visible, onClose, holding, isTracked, accentColor, meta
             ) : (
               <>
                 <View style={{ marginBottom: 14 }}>
-                  <Text style={modalStyles.label}>Additional Amount ($)</Text>
+                  <Text style={modalStyles.label}>Additional Amount ({sym})</Text>
                   <TextInput
                     style={modalStyles.input}
                     value={additionalAmount}
@@ -459,7 +464,7 @@ function AddUnitsModal({ visible, onClose, holding, isTracked, accentColor, meta
                   />
                 </View>
                 <View style={{ marginBottom: 14 }}>
-                  <Text style={modalStyles.label}>New Total Value ($) — optional</Text>
+                  <Text style={modalStyles.label}>New Total Value ({sym}) — optional</Text>
                   <TextInput
                     style={modalStyles.input}
                     value={newCurrentValue}

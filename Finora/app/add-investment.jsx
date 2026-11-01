@@ -9,6 +9,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { investmentsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getCurrencySymbol, formatCurrency } from '../utils/currency';
 
 const INVEST_TYPES = [
   { id: 'stocks', label: 'Stocks', icon: 'stats-chart', color: '#2563EB' },
@@ -78,6 +80,8 @@ const s = {
 };
 
 export default function AddInvestmentScreen() {
+  const { user } = useAuth();
+  const sym = getCurrencySymbol(user?.currency).trim();
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
   const [investType, setInvestType] = useState('stocks');
@@ -413,7 +417,7 @@ export default function AddInvestmentScreen() {
               </View>
               <View style={{ width: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Buy Price / Unit ($)</Text>
+                <Text style={s.label}>Buy Price / Unit ({sym})</Text>
                 <TextInput style={s.input} value={buyPrice} onChangeText={setBuyPrice}
                   keyboardType="decimal-pad" placeholder="0.00"
                   placeholderTextColor="#9CA3AF" />
@@ -425,7 +429,7 @@ export default function AddInvestmentScreen() {
           {useTickerMode && quantity && buyPrice && (
             <View style={{ backgroundColor: `${accentColor}10`, borderRadius: 12, padding: 14, marginBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>Total Investment</Text>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: accentColor }}>${totalInvested}</Text>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: accentColor }}>{formatCurrency(totalInvested, user?.currency)}</Text>
             </View>
           )}
 
@@ -433,14 +437,14 @@ export default function AddInvestmentScreen() {
           {!useTickerMode && (
             <View style={{ flexDirection: 'row', marginBottom: 18 }}>
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>{isManual ? 'Purchase Price ($)' : 'Amount Invested ($)'}</Text>
+                <Text style={s.label}>{isManual ? `Purchase Price (${sym})` : `Amount Invested (${sym})`}</Text>
                 <TextInput style={s.input} value={amount} onChangeText={setAmount}
                   keyboardType="decimal-pad" placeholder="0.00"
                   placeholderTextColor="#9CA3AF" />
               </View>
               <View style={{ width: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Current Value ($)</Text>
+                <Text style={s.label}>Current Value ({sym})</Text>
                 <TextInput style={s.input} value={currentValue} onChangeText={setCurrentValue}
                   keyboardType="decimal-pad" placeholder="Same as invested"
                   placeholderTextColor="#9CA3AF" />

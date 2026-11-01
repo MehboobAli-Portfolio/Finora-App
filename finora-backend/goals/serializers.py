@@ -6,7 +6,7 @@ class GoalDepositSerializer(serializers.ModelSerializer):
     class Meta:
         model = GoalDeposit
         fields = '__all__'
-        read_only_fields = ('id', 'user', 'date')
+        read_only_fields = ('id', 'user', 'goal', 'deposited_at')
 
 
 class GoalSerializer(serializers.ModelSerializer):

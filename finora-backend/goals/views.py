@@ -35,13 +35,21 @@ class GoalDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 
+from decimal import Decimal
+from django.db import transaction
+
 class GoalDepositListCreateView(generics.ListCreateAPIView):
     serializer_class = GoalDepositSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return GoalDeposit.objects.filter(user=self.request.user, goal_id=self.kwargs['goal_id'])
+        return GoalDeposit.objects.filter(user=self.request.user, goal_id=self.kwargs['goal_id']).order_by('-deposited_at')
 
     def perform_create(self, serializer):
-        goal = generics.get_object_or_404(Goal, id=self.kwargs['goal_id'], user=self.request.user)
-        serializer.save(user=self.request.user, goal=goal)
+        with transaction.atomic():
+            goal = generics.get_object_or_404(Goal, id=self.kwargs['goal_id'], user=self.request.user)
+            deposit = serializer.save(user=self.request.user, goal=goal)
+            goal.current_amount = Decimal(goal.current_amount or 0) + Decimal(deposit.amount)
+            if goal.current_amount >= goal.target_amount:
+                goal.status = 'completed'
+            goal.save()

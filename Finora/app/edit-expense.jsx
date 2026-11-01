@@ -5,9 +5,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { expensesAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getCurrencySymbol } from '../utils/currency';
 
 const CATEGORIES = [{
   id: 'food',
@@ -67,6 +68,7 @@ const CATEGORIES = [{
 }];
 
 export default function EditExpenseScreen() {
+  const { user } = useAuth();
   const params = useLocalSearchParams();
   const { id } = params;
 
@@ -180,7 +182,7 @@ export default function EditExpenseScreen() {
 
           {/* Amount */}
           <View style={{flexDirection: 'row',alignItems: 'center',justifyContent: 'center',marginBottom: 28}}>
-            <Text style={{fontSize: 40,fontWeight: '800',color: '#111827',marginRight: 4}}>$</Text>
+            <Text style={{fontSize: 40,fontWeight: '800',color: '#111827',marginRight: 4}}>{getCurrencySymbol(user?.currency)}</Text>
             <TextInput
               style={{fontSize: 56,fontWeight: '800',color: '#111827',minWidth: 120}}
               value={amount}

@@ -2,11 +2,13 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import React, { useState, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, TouchableOpacity, RefreshControl, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, TouchableOpacity, RefreshControl, ActivityIndicator, Alert, Image, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { goalsAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 
 const GOAL_ICONS = {
   savings: 'cash',
@@ -36,17 +38,16 @@ const GOAL_COLORS = {
   other: '#9CA3AF'
 };
 
-const fmt = a => `$${parseFloat(a || 0).toLocaleString('en-US', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0
-})}`;
+
 
 export default function GoalsScreen() {
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all'); // all, active, completed
+  const [depositGoal, setDepositGoal] = useState(null);
 
   const loadGoals = async () => {
     try {
@@ -117,11 +118,11 @@ export default function GoalsScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
           <View>
             <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '500' }}>Total Saved</Text>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981' }}>{fmt(totalSaved)}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981' }}>{formatCurrency(totalSaved, user?.currency, { decimals: 0 })}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '500' }}>Total Target</Text>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{fmt(totalTargeted)}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{formatCurrency(totalTargeted, user?.currency, { decimals: 0 })}</Text>
           </View>
         </View>
 
@@ -183,7 +184,9 @@ export default function GoalsScreen() {
                   pathname: '/edit-goal',
                   params: { id: goal.id }
                 })}
-                onUpdate={loadGoals} 
+                onDeposit={(g) => setDepositGoal(g)}
+                onUpdate={loadGoals}
+                currency={user?.currency}
               />
             ))
           )}
@@ -214,6 +217,15 @@ export default function GoalsScreen() {
       >
         <Ionicons name="add" size={32} color="#FFFFFF" />
       </TouchableOpacity>
+
+      {/* Deposit Modal */}
+      <DepositModal
+        visible={!!depositGoal}
+        goal={depositGoal}
+        currency={user?.currency}
+        onClose={() => setDepositGoal(null)}
+        onSuccess={loadGoals}
+      />
     </View>
   );
 }
@@ -222,11 +234,15 @@ function GoalCard({
   goal,
   onDelete,
   onEdit,
-  onUpdate
+  onDeposit,
+  onUpdate,
+  currency
 }) {
+  const [showHistory, setShowHistory] = useState(false);
   const icon = GOAL_ICONS[goal.category] || 'flag';
   const color = GOAL_COLORS[goal.category] || '#9CA3AF';
   const progress = goal.progress_percentage || goal.progress_pct || 0;
+  const deposits = goal.deposits || [];
 
   return (
     <TouchableOpacity 
@@ -255,12 +271,11 @@ function GoalCard({
         </View>
       </View>
 
-
       {/* Progress */}
-      <View style={{}}>
+      <View>
         <View style={{flexDirection: 'row',justifyContent: 'space-between',marginBottom: 8}}>
           <Text style={{fontSize: 15,fontWeight: '700',color: '#111827'}}>
-            {fmt(goal.current_amount)} <Text style={{fontSize: 13,fontWeight: '400',color: '#9CA3AF'}}>/ {fmt(goal.target_amount)}</Text>
+            {formatCurrency(goal.current_amount, currency, { decimals: 0 })} <Text style={{fontSize: 13,fontWeight: '400',color: '#9CA3AF'}}>/ {formatCurrency(goal.target_amount, currency, { decimals: 0 })}</Text>
           </Text>
           <Text style={[{fontSize: 15,fontWeight: '700'}, { color }]}>{progress}%</Text>
         </View>
@@ -271,6 +286,207 @@ function GoalCard({
           <Text style={{fontSize: 12,color: '#6B7280',marginTop: 8}}>🎯 Target: {goal.deadline}</Text>
         )}
       </View>
+
+      {/* Bottom Action Bar: Add Funds & Deposit History */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: `${color}15`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+          onPress={(e) => {
+            onDeposit(goal);
+          }}
+        >
+          <Ionicons name="add-circle" size={16} color={color} />
+          <Text style={{ fontSize: 13, fontWeight: '700', color }}>+ Add Funds</Text>
+        </TouchableOpacity>
+
+        {deposits.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setShowHistory(!showHistory)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 6 }}
+          >
+            <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600' }}>
+              {deposits.length} deposit{deposits.length > 1 ? 's' : ''}
+            </Text>
+            <Ionicons name={showHistory ? 'chevron-up' : 'chevron-down'} size={14} color="#6B7280" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Inline Deposit History */}
+      {showHistory && deposits.length > 0 && (
+        <View style={{ marginTop: 10, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderLeftWidth: 3, borderLeftColor: color }}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>
+            Recent Contributions
+          </Text>
+          {deposits.slice(0, 5).map((dep, idx) => (
+            <View key={dep.id || idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>
+                  +{formatCurrency(dep.amount, currency, { decimals: 0 })}
+                </Text>
+                {dep.note ? <Text style={{ fontSize: 11, color: '#64748B' }}>{dep.note}</Text> : null}
+              </View>
+              <Text style={{ fontSize: 11, color: '#94A3B8' }}>
+                {dep.deposited_at ? new Date(dep.deposited_at).toLocaleDateString() : ''}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </TouchableOpacity>
+  );
+}
+
+function DepositModal({ visible, goal, currency, onClose, onSuccess }) {
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (visible) {
+      setAmount('');
+      setNote('');
+    }
+  }, [visible]);
+
+  if (!goal) return null;
+
+  const sym = getCurrencySymbol(currency);
+  const color = GOAL_COLORS[goal.category] || '#2563EB';
+  const currentNum = parseFloat(goal.current_amount || 0);
+  const targetNum = parseFloat(goal.target_amount || 0);
+  const remaining = Math.max(0, targetNum - currentNum);
+
+  const handleDeposit = async () => {
+    const num = parseFloat(amount);
+    if (!num || num <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid deposit amount.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await goalsAPI.addDeposit(goal.id, {
+        amount: num,
+        note: note.trim() || undefined,
+      });
+      const willComplete = (currentNum + num) >= targetNum;
+      if (willComplete) {
+        Alert.alert('🎉 Goal Milestone Reached!', `Congratulations! You have reached your target for "${goal.name}"!`);
+      } else {
+        Alert.alert('Success', `Added ${formatCurrency(num, currency)} to "${goal.name}".`);
+      }
+      onSuccess();
+      onClose();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.amount?.[0] || 'Failed to deposit funds.';
+      Alert.alert('Error', msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+      >
+        <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 36 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${color}18`, justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name={GOAL_ICONS[goal.category] || 'flag'} size={20} color={color} />
+              </View>
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>Add Funds</Text>
+                <Text style={{ fontSize: 13, color: '#6B7280' }}>{goal.name}</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
+              <Ionicons name="close" size={22} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Overview */}
+          <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 18, flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '600' }}>CURRENT SAVED</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827', marginTop: 2 }}>
+                {formatCurrency(currentNum, currency, { decimals: 0 })}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '600' }}>REMAINING</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color, marginTop: 2 }}>
+                {formatCurrency(remaining, currency, { decimals: 0 })}
+              </Text>
+            </View>
+          </View>
+
+          {/* Amount input */}
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 6, textTransform: 'uppercase' }}>
+            Deposit Amount
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 14, height: 56, marginBottom: 12 }}>
+            <Text style={{ fontSize: 24, fontWeight: '800', color: '#2563EB', marginRight: 6 }}>{sym}</Text>
+            <TextInput
+              style={{ flex: 1, fontSize: 24, fontWeight: '800', color: '#111827' }}
+              placeholder="0"
+              placeholderTextColor="#D1D5DB"
+              keyboardType="decimal-pad"
+              value={amount}
+              onChangeText={setAmount}
+              autoFocus
+            />
+          </View>
+
+          {/* Quick chips */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            {[100, 500, 1000, 5000].map(v => (
+              <TouchableOpacity
+                key={v}
+                onPress={() => setAmount(String(v))}
+                style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>+{v}</Text>
+              </TouchableOpacity>
+            ))}
+            {remaining > 0 && (
+              <TouchableOpacity
+                onPress={() => setAmount(String(Math.round(remaining)))}
+                style={{ backgroundColor: `${color}15`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color }}>Full Remaining</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Note input */}
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 6, textTransform: 'uppercase' }}>
+            Memo Note (Optional)
+          </Text>
+          <TextInput
+            style={{ borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 14, height: 46, fontSize: 14, color: '#111827', marginBottom: 20 }}
+            placeholder="e.g. Monthly salary savings, bonus"
+            placeholderTextColor="#9CA3AF"
+            value={note}
+            onChangeText={setNote}
+          />
+
+          {/* Action button */}
+          <TouchableOpacity
+            onPress={handleDeposit}
+            disabled={submitting}
+            style={{ backgroundColor: color, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center' }}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>Confirm Deposit</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

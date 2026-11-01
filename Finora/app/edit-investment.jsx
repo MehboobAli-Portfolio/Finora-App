@@ -9,6 +9,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { investmentsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getCurrencySymbol } from '../utils/currency';
 
 const INVEST_TYPES = [
   { id: 'stocks', label: 'Stocks', icon: 'stats-chart', color: '#2563EB' },
@@ -33,6 +35,8 @@ const s = {
 };
 
 export default function EditInvestmentScreen() {
+  const { user } = useAuth();
+  const sym = getCurrencySymbol(user?.currency).trim();
   const { id } = useLocalSearchParams();
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
@@ -205,7 +209,7 @@ export default function EditInvestmentScreen() {
               </View>
               <View style={{ width: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Avg Buy Price ($)</Text>
+                <Text style={s.label}>Avg Buy Price ({sym})</Text>
                 <TextInput style={s.input} value={buyPrice} onChangeText={setBuyPrice} keyboardType="decimal-pad" />
               </View>
             </View>
@@ -215,12 +219,12 @@ export default function EditInvestmentScreen() {
           {!useTickerMode && (
             <View style={{ flexDirection: 'row', marginBottom: 18 }}>
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Total Invested ($)</Text>
+                <Text style={s.label}>Total Invested ({sym})</Text>
                 <TextInput style={s.input} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
               </View>
               <View style={{ width: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Current Value ($)</Text>
+                <Text style={s.label}>Current Value ({sym})</Text>
                 <TextInput style={s.input} value={currentValue} onChangeText={setCurrentValue} keyboardType="decimal-pad" />
               </View>
             </View>
@@ -229,7 +233,7 @@ export default function EditInvestmentScreen() {
           {/* Monthly Income */}
           {(investType === 'real_estate' || parseFloat(monthlyIncome) > 0) && (
             <View style={s.section}>
-              <Text style={s.label}>Monthly Income ($)</Text>
+              <Text style={s.label}>Monthly Income ({sym})</Text>
               <TextInput style={s.input} value={monthlyIncome} onChangeText={setMonthlyIncome} keyboardType="decimal-pad" />
             </View>
           )}

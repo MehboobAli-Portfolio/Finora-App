@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { expensesAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getCurrencySymbol } from '../utils/currency';
 
 const CATEGORIES = [{
   id: 'food',
@@ -69,6 +71,7 @@ const CATEGORIES = [{
 }];
 
 export default function AddExpenseScreen() {
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('food');
@@ -79,40 +82,69 @@ export default function AddExpenseScreen() {
   const [scanning, setScanning] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const handleScanReceipt = async () => {
+  const handleScanReceipt = () => {
+    Alert.alert('Scan Receipt', 'How would you like to capture the receipt?', [
+      {
+        text: 'Take Photo',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Camera permission is needed to scan receipts.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets && result.assets.length > 0) {
+            processReceiptAsset(result.assets[0]);
+          }
+        },
+      },
+      {
+        text: 'Choose from Gallery',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets && result.assets.length > 0) {
+            processReceiptAsset(result.assets[0]);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const processReceiptAsset = async (asset) => {
+    setScanning(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setScanning(true);
-        const asset = result.assets[0];
-        
-        const formData = new FormData();
-        const filename = asset.uri.split('/').pop() || 'receipt.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image`;
-        
-        formData.append('receipt', { uri: asset.uri, name: filename, type });
-        
-        const response = await expensesAPI.scanReceipt(formData);
-        
-        if (response.data.amount) {
-            setAmount(response.data.amount.toString());
-        }
-        if (response.data.category && response.data.category !== 'other') {
-            setCategory(response.data.category);
-        }
+      const formData = new FormData();
+      const filename = asset.uri.split('/').pop() || 'receipt.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+      formData.append('receipt', { uri: asset.uri, name: filename, type });
+
+      const response = await expensesAPI.scanReceipt(formData);
+
+      if (response.data.amount) {
+        setAmount(response.data.amount.toString());
+      }
+      if (response.data.category && response.data.category !== 'other') {
+        setCategory(response.data.category);
+      }
+      if (!title) {
         setTitle('Scanned Receipt');
       }
+      Alert.alert('Receipt Processed', `Detected amount: ${response.data.amount || 'N/A'}`);
     } catch (e) {
-        Alert.alert('Scan Failed', 'Could not process the receipt image.');
-        console.log(e);
+      Alert.alert('Scan Failed', 'Could not process the receipt image. Please enter details manually.');
+      console.log(e);
     } finally {
-        setScanning(false);
+      setScanning(false);
     }
   };
 
@@ -197,7 +229,7 @@ export default function AddExpenseScreen() {
 
           {/* Amount */}
           <View style={{flexDirection: 'row',alignItems: 'center',justifyContent: 'center',marginBottom: 28}}>
-            <Text style={{fontSize: 40,fontWeight: '800',color: '#111827',marginRight: 4}}>$</Text>
+            <Text style={{fontSize: 40,fontWeight: '800',color: '#111827',marginRight: 4}}>{getCurrencySymbol(user?.currency)}</Text>
             <TextInput
               style={{fontSize: 56,fontWeight: '800',color: '#111827',minWidth: 120}}
               value={amount}

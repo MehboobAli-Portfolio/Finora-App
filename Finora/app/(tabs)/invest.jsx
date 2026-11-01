@@ -7,6 +7,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { investmentsAPI } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../context/AuthContext';
+import { formatCurrency } from '../../utils/currency';
 import { theme } from '../../theme';
 import { Pie, PolarChart, CartesianChart, Bar } from 'victory-native';
 import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
@@ -30,16 +32,13 @@ const TYPE_META = {
   other: { label: 'Other', color: '#9CA3AF', icon: 'wallet' },
 };
 
-const fmt = a => {
-  const num = parseFloat(a || 0);
-  const formatted = Math.abs(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return num < 0 ? `-$${formatted}` : `$${formatted}`;
-};
-
 export default function InvestScreen() {
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+
+  const fmt = (a, opts) => formatCurrency(a, user?.currency, opts);
 
   const { data: investments = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['investments'],
@@ -258,7 +257,7 @@ export default function InvestScreen() {
                       <Text style={{ fontSize: 13, fontWeight: '700', color: '#6B7280' }}>{fmt(groupValue)}</Text>
                     </View>
                     {items.map(inv => (
-                      <InvestCard key={inv.id} inv={inv} onDelete={() => handleDelete(inv.id)} />
+                      <InvestCard key={inv.id} inv={inv} currency={user?.currency} onDelete={() => handleDelete(inv.id)} />
                     ))}
                   </View>
                 );
@@ -278,7 +277,7 @@ export default function InvestScreen() {
   );
 }
 
-function InvestCard({ inv, onDelete }) {
+function InvestCard({ inv, currency, onDelete }) {
   const meta = TYPE_META[inv.investment_type] || TYPE_META.other;
   const returnAmt = parseFloat(inv.return_amount || 0);
   const returnPct = parseFloat(inv.return_percentage || 0);
@@ -312,20 +311,20 @@ function InvestCard({ inv, onDelete }) {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View>
           <Text style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2, fontWeight: '600' }}>Invested</Text>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{fmt(inv.amount)}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{formatCurrency(inv.amount, currency)}</Text>
         </View>
         <View>
           <Text style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 2, fontWeight: '600' }}>
             {isTracked ? 'Market Value' : 'Current'}
           </Text>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{fmt(inv.current_value || inv.amount)}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{formatCurrency(inv.current_value || inv.amount, currency)}</Text>
         </View>
         <View style={[{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignItems: 'center' }, { backgroundColor: isPositive ? '#D1FAE5' : '#FEE2E2' }]}>
           <Text style={[{ fontSize: 14, fontWeight: '800' }, { color: isPositive ? '#10B981' : '#EF4444' }]}>
             {isPositive ? '+' : ''}{returnPct.toFixed(2)}%
           </Text>
           <Text style={[{ fontSize: 11, fontWeight: '600' }, { color: isPositive ? '#10B981' : '#EF4444' }]}>
-            {isPositive ? '+' : ''}${Math.abs(returnAmt).toFixed(2)}
+            {isPositive ? '+' : ''}{formatCurrency(returnAmt, currency)}
           </Text>
         </View>
       </View>
@@ -334,7 +333,7 @@ function InvestCard({ inv, onDelete }) {
       {inv.monthly_income > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
           <Ionicons name="cash-outline" size={14} color="#10B981" />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>{fmt(inv.monthly_income)}/month</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>{formatCurrency(inv.monthly_income, currency)}/month</Text>
         </View>
       )}
 
@@ -342,7 +341,7 @@ function InvestCard({ inv, onDelete }) {
       {isTracked && parseFloat(inv.quantity) !== 1 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
-            {parseFloat(inv.quantity).toFixed(inv.quantity % 1 !== 0 ? 6 : 0)} units @ ${parseFloat(inv.unit_price || 0).toFixed(2)}/unit
+            {parseFloat(inv.quantity).toFixed(inv.quantity % 1 !== 0 ? 6 : 0)} units @ {formatCurrency(inv.unit_price || 0, currency)}/unit
           </Text>
         </View>
       )}

@@ -12,15 +12,7 @@ import { useFinanceStore } from '../../store/useFinanceStore';
 import { theme } from '../../theme';
 import { Pie, PolarChart, CartesianChart, Bar, Line } from 'victory-native';
 import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
-
-const formatCurrency = amount => {
-  const num = parseFloat(amount || 0);
-  const formatted = Math.abs(num).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-  return num < 0 ? `-$${formatted}` : `$${formatted}`;
-};
+import { formatCurrency } from '../../utils/currency';
 
 const CATEGORY_ICONS = {
   food: 'fast-food',
@@ -156,7 +148,7 @@ export default function HomeScreen() {
         {/* Balance Card */}
         <View style={{ margin: 20, marginTop: -2, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 6 }}>
           <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Total Balance</Text>
-          <Text style={{ fontSize: 36, fontWeight: '800', color: '#111827', marginTop: 4, marginBottom: 20 }}>{formatCurrency(dashboard?.balance)}</Text>
+          <Text style={{ fontSize: 36, fontWeight: '800', color: '#111827', marginTop: 4, marginBottom: 20 }}>{formatCurrency(dashboard?.balance, user?.currency)}</Text>
 
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -165,7 +157,7 @@ export default function HomeScreen() {
               </View>
               <View>
                 <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '500' }}>Income</Text>
-                <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 1, color: '#10B981' }}>{formatCurrency(dashboard?.total_income)}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 1, color: '#10B981' }}>{formatCurrency(dashboard?.total_income, user?.currency)}</Text>
               </View>
             </View>
             <View style={{ width: 1, height: 36, backgroundColor: '#F3F4F6', marginHorizontal: 16 }} />
@@ -175,7 +167,7 @@ export default function HomeScreen() {
               </View>
               <View>
                 <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '500' }}>Expenses</Text>
-                <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 1, color: '#EF4444' }}>{formatCurrency(dashboard?.total_expenses)}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', marginTop: 1, color: '#EF4444' }}>{formatCurrency(dashboard?.total_expenses, user?.currency)}</Text>
               </View>
             </View>
           </View>
@@ -215,8 +207,8 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 }}>Monthly Budget</Text>
             <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>{formatCurrency(dashboard?.total_expenses)} spent</Text>
-                <Text style={{ fontSize: 13, color: '#6B7280' }}>of {formatCurrency(dashboard?.monthly_budget)}</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>{formatCurrency(dashboard?.total_expenses, user?.currency)} spent</Text>
+                <Text style={{ fontSize: 13, color: '#6B7280' }}>of {formatCurrency(dashboard?.monthly_budget, user?.currency)}</Text>
               </View>
               <View style={{ height: 10, backgroundColor: '#F3F4F6', borderRadius: 6, overflow: 'hidden' }}>
                 <View style={{ height: '100%', borderRadius: 6, width: `${budgetUsed}%`, backgroundColor: budgetUsed > 85 ? '#EF4444' : '#2563EB' }} />
@@ -241,7 +233,7 @@ export default function HomeScreen() {
         <View style={{ flexDirection: 'row', marginHorizontal: 20, gap: 12, marginBottom: 16 }}>
           <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, alignItems: 'center', gap: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
             <Ionicons name="trending-up" size={24} color="#2563EB" />
-            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{formatCurrency(dashboard?.total_investments)}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{formatCurrency(dashboard?.total_investments, user?.currency)}</Text>
             <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Portfolio</Text>
           </View>
           <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, alignItems: 'center', gap: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
@@ -285,7 +277,7 @@ export default function HomeScreen() {
                   <View style={{ flexDirection: 'row', height: 180, alignItems: 'flex-end', justifyContent: 'space-evenly', paddingHorizontal: 20 }}>
                     {/* Income Bar */}
                     <View style={{ alignItems: 'center', flex: 1 }}>
-                      <Text style={{ fontSize: 13, color: '#10B981', marginBottom: 8, fontWeight: '700' }}>{formatCurrency(income)}</Text>
+                      <Text style={{ fontSize: 13, color: '#10B981', marginBottom: 8, fontWeight: '700' }}>{formatCurrency(income, user?.currency)}</Text>
                       <View style={{ width: 56, height: Math.max(12, (income / maxVal) * maxBarHeight), backgroundColor: '#D1FAE5', borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end' }}>
                         <View style={{ width: '100%', height: '100%', backgroundColor: '#10B981', borderTopLeftRadius: 10, borderTopRightRadius: 10, opacity: 0.85 }} />
                       </View>
@@ -297,7 +289,7 @@ export default function HomeScreen() {
 
                     {/* Expense Bar */}
                     <View style={{ alignItems: 'center', flex: 1 }}>
-                      <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8, fontWeight: '700' }}>{formatCurrency(expenses)}</Text>
+                      <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8, fontWeight: '700' }}>{formatCurrency(expenses, user?.currency)}</Text>
                       <View style={{ width: 56, height: Math.max(12, (expenses / maxVal) * maxBarHeight), backgroundColor: '#FEE2E2', borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end' }}>
                         <View style={{ width: '100%', height: '100%', backgroundColor: '#EF4444', borderTopLeftRadius: 10, borderTopRightRadius: 10, opacity: 0.85 }} />
                       </View>
@@ -310,7 +302,7 @@ export default function HomeScreen() {
                     {/* Savings Bar */}
                     <View style={{ alignItems: 'center', flex: 1 }}>
                       <Text style={{ fontSize: 13, color: income - expenses >= 0 ? '#2563EB' : '#F59E0B', marginBottom: 8, fontWeight: '700' }}>
-                        {formatCurrency(Math.abs(income - expenses))}
+                        {formatCurrency(Math.abs(income - expenses), user?.currency)}
                       </Text>
                       <View style={{
                         width: 56,
@@ -357,7 +349,7 @@ export default function HomeScreen() {
               <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Total</Text>
                 <Text style={{ fontSize: 16, color: '#111827', fontWeight: '800' }}>
-                  {formatCurrency(dashboard.spending_by_category.reduce((sum, item) => sum + item.value, 0))}
+                  {formatCurrency(dashboard.spending_by_category.reduce((sum, item) => sum + item.value, 0), user?.currency)}
                 </Text>
               </View>
             </View>
@@ -391,7 +383,7 @@ export default function HomeScreen() {
               <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Total</Text>
                 <Text style={{ fontSize: 16, color: '#111827', fontWeight: '800' }}>
-                  {formatCurrency(dashboard.income_by_category.reduce((sum, item) => sum + item.value, 0))}
+                  {formatCurrency(dashboard.income_by_category.reduce((sum, item) => sum + item.value, 0), user?.currency)}
                 </Text>
               </View>
             </View>
@@ -453,7 +445,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            dashboard?.recent_transactions?.map(tx => <TransactionItem key={tx.id} tx={tx} />)
+            dashboard?.recent_transactions?.map(tx => <TransactionItem key={tx.id} tx={tx} currency={user?.currency} />)
           )}
         </View>
         <View style={{ height: 20 }} />
@@ -479,7 +471,8 @@ function QuickAction({
 }
 
 function TransactionItem({
-  tx
+  tx,
+  currency
 }) {
   const icon = CATEGORY_ICONS[tx.category] || 'ellipsis-horizontal';
   const color = CATEGORY_COLORS[tx.category] || '#9CA3AF';
@@ -494,7 +487,7 @@ function TransactionItem({
         <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2, textTransform: 'capitalize' }}>{tx.category} · {tx.date}</Text>
       </View>
       <Text style={{ fontSize: 15, fontWeight: '700', color: isIncome ? '#10B981' : '#EF4444' }}>
-        {isIncome ? '+' : '-'}{formatCurrency(tx.amount)}
+        {isIncome ? '+' : '-'}{formatCurrency(tx.amount, currency)}
       </Text>
     </View>
   );

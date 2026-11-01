@@ -16,6 +16,44 @@ TORCH_MIN_MARGIN = 0.04
 
 _CATEGORY_LABELS = dict(Transaction.CATEGORY_CHOICES)
 
+CURRENCY_SYMBOLS = {
+    'USD': '$',
+    'PKR': 'Rs. ',
+    'EUR': '€',
+    'GBP': '£',
+    'INR': '₹',
+    'AED': 'AED ',
+    'SAR': 'SAR ',
+    'CAD': 'CA$',
+    'AUD': 'AU$',
+    'JPY': '¥',
+    'BDT': '৳',
+    'TRY': '₺',
+    'CNY': '¥',
+    'KRW': '₩',
+    'MYR': 'RM ',
+    'SGD': 'S$',
+    'THB': '฿',
+    'PHP': '₱',
+    'IDR': 'Rp ',
+    'ZAR': 'R ',
+    'NGN': '₦',
+    'EGP': 'E£',
+    'BRL': 'R$',
+    'MXN': 'MX$',
+    'QAR': 'QAR ',
+    'KWD': 'KWD ',
+    'BHD': 'BHD ',
+    'OMR': 'OMR ',
+}
+
+def fmt_curr(amount, currency='PKR'):
+    sym = CURRENCY_SYMBOLS.get((currency or 'PKR').upper(), f"{currency} ")
+    num = float(amount or 0)
+    if num < 0:
+        return f"-{sym}{abs(num):,.2f}"
+    return f"{sym}{num:,.2f}"
+
 # ── Market data ───────────────────────────────────────────────────────────────
 # Primary source: Django cache populated every 10 min by Celery task.
 # Fallback: in-process module-level cache (same behaviour as before).
@@ -154,6 +192,10 @@ class FinoraAI:
         score += (self.completed_goals * 5)
         self.health_score = max(0, min(100, int(score)))
 
+    def fmt(self, amount):
+        curr = getattr(self.user, 'currency', 'PKR')
+        return fmt_curr(amount, curr)
+
     def generate_daily_suggestion(self):
         """Generates 1 hyper-focused contextual idea for the dashboard based deeply on health score."""
         surplus = self.income - self.expenses
@@ -163,24 +205,24 @@ class FinoraAI:
                 return f"Health Score: {self.health_score}/100. Critical Action: You haven't set a Monthly Budget. Establishing one is mathematically proven to be the fastest way to get your finances on track."
             if self.expenses > self.budget:
                 over = self.expenses - self.budget
-                return f"Health Score: {self.health_score}/100. Critical Alert: You are over budget by ${over:,.2f}. Avoid non-essential spending for the remainder of the month."
+                return f"Health Score: {self.health_score}/100. Critical Alert: You are over budget by {self.fmt(over)}. Avoid non-essential spending for the remainder of the month."
             if surplus <= 0:
-                return f"Health Score: {self.health_score}/100. Savings Alert: Your expenses are currently consuming your entire income (${self.income:,.2f}). Try to reduce discretionary spending by 15% this week."
+                return f"Health Score: {self.health_score}/100. Savings Alert: Your expenses are currently consuming your entire income ({self.fmt(self.income)}). Try to reduce discretionary spending by 15% this week."
 
         elif self.health_score < 75:
             if self.active_goals and surplus > 0:
                 goal = self.active_goals[0]
                 dist = float(goal.target_amount - goal.current_amount)
                 months = dist / surplus
-                return f"Health Score: {self.health_score}/100. Track Forecast: With your current surplus of ${surplus:,.2f}/month, if you focus entirely on your '{goal.name}' goal, you will complete it in just {months:.1f} months!"
-            return f"Health Score: {self.health_score}/100. Doing well: You have a surplus of ${surplus:,.2f}. Consider opening a savings goal to direct this cash effectively, like an Emergency Fund."
+                return f"Health Score: {self.health_score}/100. Track Forecast: With your current surplus of {self.fmt(surplus)}/month, if you focus entirely on your '{goal.name}' goal, you will complete it in just {months:.1f} months!"
+            return f"Health Score: {self.health_score}/100. Doing well: You have a surplus of {self.fmt(surplus)}. Consider opening a savings goal to direct this cash effectively, like an Emergency Fund."
 
         else:
             if self.active_goals and surplus > 0:
-                return f"Health Score: {self.health_score}/100. Excellent momentum! You have ${surplus:,.2f}/mo extra cash. If you divide this equally among your {len(self.active_goals)} active goals, they will grow on autopilot."
+                return f"Health Score: {self.health_score}/100. Excellent momentum! You have {self.fmt(surplus)}/mo extra cash. If you divide this equally among your {len(self.active_goals)} active goals, they will grow on autopilot."
             elif self.market_data and surplus > 0:
                 spy_price = self.market_data.get('spy_price', 500)
-                return f"Health Score: {self.health_score}/100. Wealth Building: With a massive surplus of ${surplus:,.2f}/mo, consider dollar-cost averaging into an index fund like SPY (currently ${spy_price:,.2f}) to drastically accelerate compound growth over the next 5 years."
+                return f"Health Score: {self.health_score}/100. Wealth Building: With a massive surplus of {self.fmt(surplus)}/mo, consider dollar-cost averaging into an index fund like SPY (currently ${spy_price:,.2f}) to drastically accelerate compound growth over the next 5 years."
             return f"Health Score: {self.health_score}/100. Financial Independence unlocked! Keep optimizing your strategy."
 
     def _extract_ticker(self, message):
@@ -222,7 +264,7 @@ class FinoraAI:
             cat = row.get("category") or "other"
             label = _CATEGORY_LABELS.get(cat, cat.replace("_", " ").title())
             total = float(row.get("total") or 0)
-            lines.append(f"- {label}: ${total:,.2f}")
+            lines.append(f"- {label}: {self.fmt(total)}")
         return "\nTop categories this month:\n" + "\n".join(lines)
 
     def _recent_activity_text(self, limit=8):
@@ -237,7 +279,7 @@ class FinoraAI:
             tt = t.get("txn_type") or "expense"
             d = t.get("date") or ""
             sign = "+" if tt == "income" else "-"
-            lines.append(f"- {d} {desc} ({label}) {sign}${amt:,.2f}")
+            lines.append(f"- {d} {desc} ({label}) {sign}{self.fmt(amt)}")
         return "\nRecent activity from your ledger:\n" + "\n".join(lines)
 
     def process_chat_message(self, message: str, chat_history: list = None) -> tuple:
@@ -388,19 +430,19 @@ class FinoraAI:
             pct = (self.expenses / self.budget) * 100
             if remaining < 0:
                 return score_msg + (
-                    f"\n⚠️ Alert: You are over budget by ${abs(remaining):,.2f}! It's completely normal to slip up, "
+                    f"\n⚠️ Alert: You are over budget by {self.fmt(abs(remaining))}! It's completely normal to slip up, "
                     "but to get back on track, try to pause non-essential spending for the rest of the month."
                 )
             return score_msg + (
-                f"\nYou currently have ${remaining:,.2f} remaining in your regular budget. "
+                f"\nYou currently have {self.fmt(remaining)} remaining in your regular budget. "
                 f"You've used {pct:.1f}% of it so far. Keep up the balanced habits!"
             )
 
         elif intent == "check_balance":
-            return f"According to your logged transactions, your total net balance currently stands at ${self.balance:,.2f}."
+            return f"According to your logged transactions, your total net balance currently stands at {self.fmt(self.balance)}."
 
         elif intent == "check_spending":
-            msg = f"You've tracked ${self.expenses:,.2f} in overall expenses this month.\n"
+            msg = f"You've tracked {self.fmt(self.expenses)} in overall expenses this month.\n"
             msg += self._category_breakdown_text()
             msg += self._recent_activity_text(8)
             if self.budget > 0 and self.expenses > self.budget:
@@ -421,7 +463,7 @@ class FinoraAI:
 
             if surplus > 0:
                 base_msg += (
-                    f"With your current monthly surplus of ${surplus:,.2f}, here are your live forecasts if you "
+                    f"With your current monthly surplus of {self.fmt(surplus)}, here are your live forecasts if you "
                     "allocate your extra cash optimally:\n\n"
                 )
                 split_surplus = surplus / len(self.active_goals)
@@ -431,14 +473,14 @@ class FinoraAI:
                         continue
                     months = rem / split_surplus
                     base_msg += (
-                        f"🎯 **{g.name}**: Remaining ${rem:,.2f}. By directing your equal share "
-                        f"(${split_surplus:,.2f}/mo) toward this, you'll reach it in **{months:.1f} months**!\n"
+                        f"🎯 **{g.name}**: Remaining {self.fmt(rem)}. By directing your equal share "
+                        f"({self.fmt(split_surplus)}/mo) toward this, you'll reach it in **{months:.1f} months**!\n"
                     )
             else:
                 base_msg += "Currently, your expenses are limiting your ability to save. Let's look at your remaining targets:\n\n"
                 for g in self.active_goals:
                     rem = float(g.target_amount - g.current_amount)
-                    base_msg += f"- {g.name}: ${rem:,.2f} left.\n"
+                    base_msg += f"- {g.name}: {self.fmt(rem)} left.\n"
                 base_msg += "\nTry to cut back your discretionary spending this week to unlock savings momentum."
 
             return base_msg
@@ -466,7 +508,7 @@ class FinoraAI:
                 total_val += val
                 sym_part = f" ({sym})" if sym else ""
                 ret = f"{float(rp):+.1f}%" if rp is not None else "n/a"
-                lines.append(f"- {name}{sym_part} [{itype}]: book value ${val:,.2f} vs cost ${cost:,.2f} → {ret} unrealized")
+                lines.append(f"- {name}{sym_part} [{itype}]: book value {self.fmt(val)} vs cost {self.fmt(cost)} → {ret} unrealized")
             if total_cost > 0:
                 agg = (total_val - total_cost) / total_cost * 100
                 lines.append("")
@@ -492,12 +534,12 @@ class FinoraAI:
                 detailed_advise += "4️⃣ 5% High Risk (Bitcoin / BTC): Optional allocation for potential exponential upside.\n\n"
 
                 detailed_advise += (
-                    f"💡 Projection: If you invest your ${surplus:,.2f}/month surplus consistently, an ~8% historical "
-                    f"return could yield approximately **${five_year_inv:,.2f}** in 5 years! Stay balanced and consistent."
+                    f"💡 Projection: If you invest your {self.fmt(surplus)}/month surplus consistently, an ~8% historical "
+                    f"return could yield approximately **{self.fmt(five_year_inv)}** in 5 years! Stay balanced and consistent."
                 )
             else:
                 detailed_advise += (
-                    f"Investing is powerful, but right now, your monthly expenses (${self.expenses:,.2f}) completely "
+                    f"Investing is powerful, but right now, your monthly expenses ({self.fmt(self.expenses)}) completely "
                     "consume your income. A balanced approach means eliminating high-interest debt and building a small "
                     "cash safety net first. Try cutting back discretionary spending to create a cash surplus, then you "
                     "can confidently start investing!"
@@ -524,7 +566,7 @@ class FinoraAI:
                 shares_spy = surplus / spy_price
                 shares_btc = surplus / btc_price
                 adv += (
-                    f"With your current budget surplus of ${surplus:,.2f}/month, you could afford to buy approximately "
+                    f"With your current budget surplus of {self.fmt(surplus)}/month, you could afford to buy approximately "
                     f"{shares_spy:.2f} shares of SPY or {shares_btc:.5f} BTC each month! Dollar Cost Averaging helps "
                     "smooth volatility over time."
                 )
