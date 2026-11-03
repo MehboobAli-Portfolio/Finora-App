@@ -1,123 +1,96 @@
-# Finora App
+<div align="center">
 
-Finora is a mobile-first personal finance app built to help users manage daily spending, savings goals, investments, and long-term financial planning in one place. The project combines a React Native + Expo frontend with a Django REST API backend to provide a complete personal finance experience for budgeting, portfolio tracking, and AI-assisted insights.
+# 💸 Finora
 
-## Overview
+### Your money, organized. Your future, in focus.
 
-Finora helps users:
+A mobile-first personal finance app for managing income, expenses, savings, and investments — with AI-powered coaching to help you make more confident financial decisions.
 
-- track expenses and recurring spending
-- create and monitor financial goals
-- manage investment holdings over time
-- analyze salary scenarios and income planning
-- get AI-based advice for budgeting and spending behavior
-- scan receipts and keep financial records organized
+[Features](#-features) · [Tech Stack](#-tech-stack) · [Getting Started](#-getting-started) · [API](#-api-overview)
 
-## Features
+</div>
 
-- Expense tracking and category-based financial entries
-- Savings goal creation and progress tracking
-- Investment portfolio tracking and detail views
-- Salary reality analysis tools
-- AI-powered chat experience for financial coaching
-- User authentication and profile management
-- Secure token-based authentication using JWT
-- Mobile-first architecture with Expo and React Native
+---
 
-## Tech Stack
+## ✨ About Finora
 
-### Frontend
+Finora brings the essentials of personal finance together in one place. Track spending, build savings goals, monitor investments, explore income scenarios, and get AI-powered guidance — all through a mobile-first experience.
 
-- React Native
-- Expo
-- Expo Router
-- Zustand
-- TanStack React Query
-- Axios
-- SecureStore for authenticated token storage
-- Victory Native for charts and analytics
-- Reanimated for smooth mobile interactions
+| 💳 Track | 🎯 Plan | 📈 Grow | 🤖 Learn |
+|:---:|:---:|:---:|:---:|
+| Understand expenses and recurring spending | Set goals and follow your progress | Keep an eye on investment holdings | Get budgeting insights from the AI coach |
 
-### Backend
+## 🚀 Features
 
-- Django
-- Django REST Framework
-- JWT authentication
-- SQLite for local development
-- Redis + Celery for optional background tasks and caching
-- Libraries for market data and AI features, including Torch, yfinance, scikit-learn, sentence-transformers, and chromadb
+| Feature | What it helps you do |
+|---|---|
+| **Expense tracking** | Record and organize expenses by category |
+| **Savings goals** | Create financial goals and monitor progress |
+| **Investment tracking** | View investment holdings and details |
+| **Salary reality** | Explore salary scenarios and income planning |
+| **AI financial coach** | Chat for budgeting advice and financial insights |
+| **Receipt scanning** | Scan receipts and keep financial records organized |
+| **Account management** | Register, sign in, and manage your profile |
+| **Mobile-first experience** | Use the app built with Expo and React Native |
 
-## Project Structure
+## 🧰 Tech Stack
+
+| Area | Technologies |
+|---|---|
+| **Mobile app** | React Native, Expo, Expo Router |
+| **State & data** | Zustand, TanStack React Query, Axios |
+| **Mobile utilities** | Expo SecureStore, Reanimated |
+| **Charts** | Victory Native |
+| **Backend** | Python, Django, Django REST Framework |
+| **Authentication** | JWT |
+| **Development database** | SQLite |
+| **Optional background work** | Redis, Celery |
+| **AI & finance libraries** | PyTorch, yfinance, scikit-learn, sentence-transformers, ChromaDB |
+
+## 📁 Project Structure
 
 ```text
 Finora-App/
-├── Finora/                              # React Native + Expo frontend
-│   ├── app/                             # Expo Router screens and navigation
-│   │   ├── (tabs)/                      # Main tab navigation screens
-│   │   │   ├── _layout.jsx
-│   │   │   ├── index.jsx                # Dashboard/home screen
-│   │   │   ├── expenses.jsx             # Expense management
-│   │   │   ├── goals.jsx                # Goals dashboard
-│   │   │   ├── invest.jsx               # Investment overview
-│   │   │   ├── salary-reality.jsx       # Salary analysis views
-│   │   │   ├── ai.jsx                   # AI coach interface
-│   │   │   └── profile.jsx              # User profile screen
-│   │   ├── _layout.jsx                  # Root app layout
-│   │   ├── login.jsx                   # Login screen
-│   │   ├── register.jsx                # Registration screen
-│   │   ├── forgot-password.jsx         # Password reset screen
-│   │   ├── add-expense.jsx             # Add expense form
-│   │   ├── add-goal.jsx                # Add goal form
-│   │   ├── add-investment.jsx          # Add investment form
-│   │   ├── edit-expense.jsx            # Edit expense form
-│   │   ├── edit-goal.jsx               # Edit goal form
-│   │   ├── edit-investment.jsx         # Edit investment form
-│   │   ├── investment-detail/[id].jsx  # Investment detail page
-│   │   └── index.jsx                   # Launch screen/router entry
-│   ├── services/                       # API client helpers
-│   ├── context/                        # App context providers
-│   ├── store/                          # Shared Zustand stores
-│   ├── utils/                          # Utility/helper modules
-│   ├── assets/                         # Images and static assets
-│   ├── app.config.js                   # Expo config and API URL setup
-│   ├── package.json                    # Frontend dependencies
-│   ├── theme.js                        # Shared app theme
-│   └── .npmrc                          # npm config
+├── Finora/                         # React Native + Expo app
+│   ├── app/                        # Screens and Expo Router navigation
+│   │   ├── (tabs)/                 # Main app tabs
+│   │   ├── investment-detail/      # Investment details
+│   │   └── ...                     # Auth, expenses, goals, investments
+│   ├── services/                   # API client helpers
+│   ├── context/                    # App context providers
+│   ├── store/                      # Zustand stores
+│   ├── utils/                      # Shared utilities
+│   ├── assets/                     # Images and static assets
+│   ├── app.config.js               # Expo configuration
+│   └── package.json                # Frontend dependencies
 │
-├── finora-backend/                      # Django backend
-│   ├── ai_coach/                       # AI coach logic and routes
-│   ├── config/                         # Django config package
-│   ├── goals/                          # Goal-related API app
-│   ├── investments/                     # Investment portfolio API app
-│   ├── salary_reality/                  # Salary analysis API app
-│   ├── transactions/                   # Expense transaction API app
-│   ├── users/                          # Auth and user management app
-│   ├── asgi.py                         # ASGI app entry
-│   ├── wsgi.py                         # WSGI app entry
-│   ├── manage.py                      # Django management CLI
-│   ├── settings.py                    # Project settings and config
-│   ├── urls.py                        # Root API routing
-│   ├── requirements.txt               # Python dependencies
-│   ├── create_admin.py                # Helper for creating admin user
-│   ├── create_admin.ps1               # PowerShell admin helper
-│   └── db.sqlite3                     # SQLite database used in dev
+├── finora-backend/                 # Django REST API
+│   ├── ai_coach/                   # AI coaching features
+│   ├── goals/                      # Savings goal APIs
+│   ├── investments/                # Investment APIs
+│   ├── salary_reality/             # Salary analysis
+│   ├── transactions/               # Expense APIs
+│   ├── users/                      # Authentication and profiles
+│   ├── config/                     # Django configuration
+│   ├── requirements.txt            # Python dependencies
+│   └── manage.py                   # Django management CLI
 │
-├── start.ps1                           # Starts backend, frontend, and optional Celery
-├── .gitignore
+├── start.ps1                       # Windows development launcher
 ├── LICENSE
-├── README.md
-└── .gitignore
+└── README.md
 ```
 
-## Getting Started
+## 🛠️ Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
-- Python 3.10+
-- Git
-- Redis (optional, for Celery and cache-based background tasks)
+| Requirement | Version / Notes |
+|---|---|
+| Node.js | 18 or newer |
+| npm or Yarn | Use the package manager you prefer |
+| Python | 3.10 or newer |
+| Git | For cloning the repository |
+| Redis | Optional; used for Celery and cache-based tasks |
 
 ### 1. Clone the repository
 
@@ -133,19 +106,34 @@ cd Finora
 npm install
 ```
 
-### 3. Install backend dependencies
+### 3. Set up the backend environment
+
+From the repository root:
 
 ```bash
-cd ../finora-backend
+cd finora-backend
 python -m venv .venv
+```
+
+Activate the virtual environment:
+
+```bash
+# macOS / Linux
 source .venv/bin/activate
-# On Windows: .venv\Scripts\activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+```
+
+Install backend dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
 ### 4. Configure environment variables
 
-Create a `.env` file in `finora-backend/` with values like:
+Create a `.env` file in `finora-backend/` and set the values required by your local setup. For example:
 
 ```env
 SECRET_KEY=your-strong-secret-key
@@ -154,13 +142,17 @@ ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.158
 CORS_ALLOWED_ORIGINS=http://localhost:8081,http://127.0.0.1:8081,http://192.168.1.158:8081
 ```
 
-Optional Redis config:
+Optional Redis configuration:
 
 ```env
 REDIS_URL=redis://127.0.0.1:6379/1
 ```
 
-### 5. Run database migrations
+> **Tip:** Replace the example host and origin values with the addresses used by your development environment. Keep real secrets out of version control.
+
+### 5. Apply database migrations
+
+While in `finora-backend/` with the virtual environment activated:
 
 ```bash
 python manage.py migrate
@@ -172,60 +164,64 @@ python manage.py migrate
 python manage.py runserver 0.0.0.0:8000
 ```
 
-### 7. Start the frontend
+### 7. Start the mobile app
 
-Open a new terminal and run:
+Open a second terminal:
 
 ```bash
 cd Finora
 npx expo start
 ```
 
-### 8. Run everything together
+### Run the development stack together (Windows)
 
-A ready-made PowerShell launcher is included:
+The repository includes a PowerShell launcher:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File start.ps1
 ```
 
-This script starts the Django backend, Expo frontend, and Celery workers if Redis is reachable.
+The script starts the Django backend, Expo frontend, and Celery workers when Redis is available.
 
-## API Structure
+## 🔌 API Overview
 
-The backend exposes these main API groups:
+| Endpoint | Purpose |
+|---|---|
+| `/api/auth/` | Authentication, dashboard, profile, and password reset |
+| `/api/transactions/` | Expenses and transaction analytics |
+| `/api/goals/` | Savings goals |
+| `/api/investments/` | Investment holdings, market data, and analytics |
+| `/api/salary/` | Salary comparison and income planning |
+| `/api/ai/` | AI chat and financial insights |
 
-- `/api/auth/` — login, register, dashboard, profile, password reset
-- `/api/transactions/` — expenses and analytics
-- `/api/goals/` — savings goals
-- `/api/investments/` — holdings, pricing, market data, analytics
-- `/api/salary/` — salary comparison and planning logic
-- `/api/ai/` — AI chat and financial insights
+## ⚙️ Frontend Configuration
 
-## Frontend Configuration
-
-The Expo app resolves the backend URL dynamically using `app.config.js` and `expo-constants`.
-
-Default development API URL:
+The Expo app resolves the backend URL through `app.config.js` and `expo-constants`. The current default development URL is:
 
 ```text
 http://192.168.1.158:8000/api/
 ```
 
-You can override this by setting the `API_URL` environment variable in the Expo environment.
+To use a different backend, configure the `API_URL` environment variable for your Expo environment.
 
-## Notes
+## 🗺️ What's Included
 
-- The project is organized into a separate frontend and backend for easier local development.
-- SQLite is used by default for local development.
-- Redis and Celery are optional but are used for scheduled refreshes and cache-backed background workloads.
-- The app includes both authentication flows and finance-specific modules such as investments, goals, salary analysis, and AI coaching.
+- Separate mobile frontend and Django backend
+- SQLite-backed local development by default
+- Optional Redis and Celery support for background tasks
+- Finance tools for expenses, goals, investments, and salary planning
+- An AI coach experience for financial guidance
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
+Finora is licensed under the MIT License. See [`LICENSE`](LICENSE) for details.
 
-## Repository
+## 🔗 Repository
 
-- GitHub: https://github.com/MehboobAli-Portfolio
-- Project: https://github.com/MehboobAli-Portfolio/Finora-App
+[MehboobAli-Portfolio/Finora-App](https://github.com/MehboobAli-Portfolio/Finora-App)
+
+<div align="center">
+
+**Build healthier money habits with Finora.**
+
+</div>
