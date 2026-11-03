@@ -1,609 +1,227 @@
-# Finora – AI-Powered Personal Finance & Wealth Management
+<div align="center">
 
-![Status](https://img.shields.io/badge/status-active-success.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android%20%7C%20Web-lightblue.svg)
+# 💸 Finora
 
-**Finora** is a comprehensive full-stack personal finance application designed to empower users with complete control over their financial health. Combining intelligent expense tracking, AI-driven insights, and real-time wealth management tools, Finora helps users make smarter financial decisions and achieve long-term financial goals.
+### Your money, organized. Your future, in focus.
 
----
+A mobile-first personal finance app for managing income, expenses, savings, and investments — with AI-powered coaching to help you make more confident financial decisions.
 
-## 📋 Table of Contents
+[Features](#-features) · [Tech Stack](#-tech-stack) · [Getting Started](#-getting-started) · [API](#-api-overview)
 
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Technology Stack](#technology-stack)
-- [Getting Started](#getting-started)
-- [Project Structure](#project-structure)
-- [API Documentation](#api-documentation)
-- [Security](#security)
-- [Performance Optimization](#performance-optimization)
-- [Deployment](#deployment)
-- [Development Workflow](#development-workflow)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [Support](#support)
-- [License](#license)
+</div>
 
 ---
 
-## 📊 Overview
+## ✨ About Finora
 
-Finora provides a unified platform for personal financial management with the following capabilities:
+Finora brings the essentials of personal finance together in one place. Track spending, build savings goals, monitor investments, explore income scenarios, and get AI-powered guidance — all through a mobile-first experience.
 
-- **Real-time Expense Tracking** – Categorize and monitor daily spending with an intelligent dynamic form system
-- **Financial Goal Management** – Set, edit, and track savings targets with visual progress indicators
-- **Investment Ledger** – Track asset growth, capital allocations, and portfolio performance
-- **AI Neural Coach** – Get personalized spending analysis and financial recommendations through a native chat interface
-- **Salary Analysis** – Compare income patterns across locations and analyze compensation tiers
-- **Receipt Scanning** – Capture receipts via OCR technology for automated expense categorization
+| 💳 Track | 🎯 Plan | 📈 Grow | 🤖 Learn |
+|:---:|:---:|:---:|:---:|
+| Understand expenses and recurring spending | Set goals and follow your progress | Keep an eye on investment holdings | Get budgeting insights from the AI coach |
 
----
+## 🚀 Features
 
-## 🎯 Key Features
+| Feature | What it helps you do |
+|---|---|
+| **Expense tracking** | Record and organize expenses by category |
+| **Savings goals** | Create financial goals and monitor progress |
+| **Investment tracking** | View investment holdings and details |
+| **Salary reality** | Explore salary scenarios and income planning |
+| **AI financial coach** | Chat for budgeting advice and financial insights |
+| **Receipt scanning** | Scan receipts and keep financial records organized |
+| **Account management** | Register, sign in, and manage your profile |
+| **Mobile-first experience** | Use the app built with Expo and React Native |
 
-### Core Functionality
+## 🧰 Tech Stack
 
-| Feature | Description |
-|---------|-------------|
-| **💸 Intelligent Expense Tracking** | Dynamic expense categorization with customizable form inputs for comprehensive spending analysis |
-| **🎯 Financial Goal Architect** | Create and monitor savings goals with real-time progress visualization and achievement milestones |
-| **📊 Investment Management** | Dedicated portfolio ledger for tracking asset allocation, growth metrics, and capital management |
-| **🧠 Neural Coach (AI Module)** | Native real-time AI chat providing contextual spending insights and personalized financial recommendations |
-| **💰 Salary Reality Check** | Advanced income analysis tool with location-based comparisons and compensation tier breakdowns |
-| **📈 Receipt Scanning** | OCR-powered receipt capture with automatic expense categorization and metadata extraction |
-| **📱 Cross-Platform Support** | Seamless experience across iOS, Android, and web platforms |
-
----
-
-## 🛠️ Technology Stack
-
-### Frontend Architecture
-- **Framework:** React Native 0.81.5
-- **Router:** Expo Router 6.0.23
-- **State Management:** Zustand 5.0.12, Async Storage
-- **HTTP Client:** Axios 1.13.6
-- **Data Fetching:** TanStack React Query 5.100.6
-- **Charting & Visualization:** Victory Native 41.20.2
-- **Animations:** React Native Reanimated 4.1.1
-- **UI Components:** Expo Vector Icons, React Native Gesture Handler
-- **Development:** Expo 54.0.34
-
-### Backend Architecture
-- **Framework:** Django 5.x + Django REST Framework
-- **Authentication:** JWT (JSON Web Tokens)
-- **AI Integration:** Custom Neural Coach module with intelligent analysis
-- **Database:** PostgreSQL (recommended for production)
-- **API Structure:** Modular Django apps architecture
-  - `users` – User authentication and profile management
-  - `ai_coach` – AI-powered financial insights
-  - `salary_reality` – Salary analysis and comparisons
-  - `transactions` – Expense tracking
-  - `goals` – Financial goal management
-
-### Infrastructure
-- **Mobile Platforms:** iOS & Android via Expo
-- **Web:** React web target (development/preview)
-- **Build System:** Expo Build Service (EAS)
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-**Frontend:**
-- Node.js 18 or higher
-- npm or yarn package manager
-- Expo CLI (`npm install -g expo-cli`)
-
-**Backend:**
-- Python 3.9 or higher
-- pip package manager
-- Virtual environment support
-
-### Frontend Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/MehboobAli-Portfolio/Finora-App.git
-cd Finora-App/Finora
-
-# 2. Install dependencies
-npm install
-
-# 3. Configure environment variables
-cp .env.example .env
-# Edit .env with your backend API_URL
-# Example: API_URL=http://localhost:8000/api
-
-# 4. Start development server
-npm start
-
-# Platform-specific commands:
-npm run ios      # Run on iOS simulator
-npm run android  # Run on Android emulator
-npm run web      # Run in web browser
-```
-
-### Backend Installation
-
-```bash
-# 1. Navigate to backend directory
-cd Finora-App/finora-backend
-
-# 2. Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate
-# On Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Configure environment
-cp .env.example .env
-# Edit .env with database credentials and security settings
-
-# 5. Initialize database
-python manage.py migrate
-python manage.py collectstatic --noinput
-
-# 6. Create superuser account (for admin access)
-python manage.py createsuperuser
-
-# 7. Start development server
-python manage.py runserver
-# Server runs at: http://localhost:8000
-```
-
----
+| Area | Technologies |
+|---|---|
+| **Mobile app** | React Native, Expo, Expo Router |
+| **State & data** | Zustand, TanStack React Query, Axios |
+| **Mobile utilities** | Expo SecureStore, Reanimated |
+| **Charts** | Victory Native |
+| **Backend** | Python, Django, Django REST Framework |
+| **Authentication** | JWT |
+| **Development database** | SQLite |
+| **Optional background work** | Redis, Celery |
+| **AI & finance libraries** | PyTorch, yfinance, scikit-learn, sentence-transformers, ChromaDB |
 
 ## 📁 Project Structure
 
-```
+```text
 Finora-App/
-├── Finora/                              # Frontend (React Native + Expo)
-│   ├── app/
-│   │   ├── (tabs)/                      # Tab-based navigation
-│   │   │   ├── _layout.jsx              # Tab navigator configuration
-│   │   │   ├── dashboard.jsx            # Financial overview & KPIs
-│   │   │   ├── transactions.jsx         # Expense tracking & history
-│   │   │   ├── goals.jsx                # Financial goal management
-│   │   │   ├── salary-reality.jsx       # Salary analysis & comparisons
-│   │   │   └── ai.jsx                   # AI Neural Coach chat interface
-│   │   ├── _layout.jsx                  # Root app layout
-│   │   └── index.jsx                    # App entry point
-│   ├── services/
-│   │   ├── api.js                       # Axios API client configuration
-│   │   ├── authAPI.js                   # Authentication endpoints
-│   │   ├── aiAPI.js                     # AI Coach API integration
-│   │   ├── salaryAPI.js                 # Salary analysis endpoints
-│   │   └── transactionAPI.js            # Transaction endpoints
-│   ├── components/                      # Reusable React components
-│   ├── hooks/                           # Custom React hooks
-│   ├── package.json                     # Frontend dependencies
-│   ├── app.json                         # Expo configuration
-│   └── .env.example                     # Environment template
+├── Finora/                         # React Native + Expo app
+│   ├── app/                        # Screens and Expo Router navigation
+│   │   ├── (tabs)/                 # Main app tabs
+│   │   ├── investment-detail/      # Investment details
+│   │   └── ...                     # Auth, expenses, goals, investments
+│   ├── services/                   # API client helpers
+│   ├── context/                    # App context providers
+│   ├── store/                      # Zustand stores
+│   ├── utils/                      # Shared utilities
+│   ├── assets/                     # Images and static assets
+│   ├── app.config.js               # Expo configuration
+│   └── package.json                # Frontend dependencies
 │
-├── finora-backend/                      # Backend (Django REST)
-│   ├── config/                          # Core Django configuration
-│   │   ├── settings.py                  # Django settings & middleware
-│   │   ├── urls.py                      # Root URL routing
-│   │   ├── wsgi.py                      # Production WSGI app
-│   │   └── asgi.py                      # WebSocket/async support
-│   │
-│   ├── users/                           # User management module
-│   │   ├── models.py                    # User profile model
-│   │   ├── views.py                     # Authentication & profile views
-│   │   ├── serializers.py               # Request/response serialization
-│   │   ├── urls.py                      # Module routes (/api/auth/)
-│   │   └── admin.py                     # Django admin configuration
-│   │
-│   ├── transactions/                    # Expense tracking module
-│   │   ├── models.py                    # Transaction model
-│   │   ├── views.py                     # CRUD endpoints
-│   │   ├── serializers.py               # Serialization logic
-│   │   └── urls.py                      # Transaction routes
-│   │
-│   ├── goals/                           # Goal management module
-│   │   ├── models.py                    # Financial goal model
-│   │   ├── views.py                     # Goal CRUD operations
-│   │   ├── serializers.py               # Goal serialization
-│   │   └── urls.py                      # Goal routes
-│   │
-│   ├── ai_coach/                        # AI Intelligence module
-│   │   ├── views.py                     # Chat & insight endpoints
-│   │   ├── serializers.py               # AI response serialization
-│   │   ├── urls.py                      # AI routes (/api/ai/)
-│   │   ├── ai_logic.py                  # AI processing algorithms
-│   │   ├── ai_model/                    # Neural model files
-│   │   └── prompts.py                   # AI prompt templates
-│   │
-│   ├── salary_reality/                  # Salary Analysis module
-│   │   ├── views.py                     # Analysis endpoints
-│   │   ├── serializers.py               # Response serialization
-│   │   ├── urls.py                      # Routes (/api/salary/)
-│   │   ├── salary_logic.py              # Analysis algorithms
-│   │   └── models.py                    # Salary tier data
-│   │
-│   ├── manage.py                        # Django CLI
-│   ├── requirements.txt                 # Python dependencies
-│   ├── .env.example                     # Environment template
-│   └── tests/                           # Test suite
+├── finora-backend/                 # Django REST API
+│   ├── ai_coach/                   # AI coaching features
+│   ├── goals/                      # Savings goal APIs
+│   ├── investments/                # Investment APIs
+│   ├── salary_reality/             # Salary analysis
+│   ├── transactions/               # Expense APIs
+│   ├── users/                      # Authentication and profiles
+│   ├── config/                     # Django configuration
+│   ├── requirements.txt            # Python dependencies
+│   └── manage.py                   # Django management CLI
 │
-├── scripts/                             # Utility & deployment scripts
-├── .gitignore                           # Git ignore rules
-├── LICENSE                              # MIT License
-└── README.md                            # This file
+├── start.ps1                       # Windows development launcher
+├── LICENSE
+└── README.md
 ```
 
----
+## 🛠️ Getting Started
 
-## 🔌 API Documentation
+### Prerequisites
 
-### Authentication Module (`/api/auth/`)
+| Requirement | Version / Notes |
+|---|---|
+| Node.js | 18 or newer |
+| npm or Yarn | Use the package manager you prefer |
+| Python | 3.10 or newer |
+| Git | For cloning the repository |
+| Redis | Optional; used for Celery and cache-based tasks |
 
-| Method | Endpoint | Description | Request | Response |
-|--------|----------|-------------|---------|----------|
-| `POST` | `/register/` | Create user account | Email, password, name | User object + JWT token |
-| `POST` | `/login/` | Authenticate user | Email, password | JWT access & refresh tokens |
-| `POST` | `/logout/` | Invalidate session | Authorization header | Success message |
-| `GET` | `/profile/` | Retrieve user details | Authorization header | User profile object |
-| `PUT` | `/profile/` | Update user information | Name, email, settings | Updated user object |
-| `GET` | `/dashboard/` | Financial overview | Authorization header | Balance, expenses, goals summary |
-
-### Transactions Module (`/api/transactions/`)
-
-```
-GET    /api/transactions/                - List all user transactions
-POST   /api/transactions/                - Create new expense entry
-GET    /api/transactions/{id}/           - Retrieve transaction details
-PUT    /api/transactions/{id}/           - Update transaction
-DELETE /api/transactions/{id}/           - Remove transaction
-GET    /api/transactions/category/stats/ - Get category-based statistics
-```
-
-### Goals Module (`/api/goals/`)
-
-```
-GET    /api/goals/                       - List all financial goals
-POST   /api/goals/                       - Create new goal
-GET    /api/goals/{id}/                  - Retrieve goal details
-PUT    /api/goals/{id}/                  - Update goal progress
-DELETE /api/goals/{id}/                  - Delete goal
-GET    /api/goals/{id}/progress/         - Get goal achievement metrics
-```
-
-### AI Coach Module (`/api/ai/`)
-
-```
-POST   /api/ai/chat/                     - Send message to Neural Coach
-GET    /api/ai/chat/history/             - Retrieve chat conversation history
-POST   /api/ai/insight/                  - Get spending analysis insights
-POST   /api/ai/recommendations/          - Receive financial recommendations
-GET    /api/ai/summary/                  - Get monthly financial summary
-```
-
-### Salary Reality Module (`/api/salary/`)
-
-```
-POST   /api/salary/analyse/              - Analyze salary across locations
-GET    /api/salary/tiers/                - Retrieve salary tier data
-GET    /api/salary/compare/              - Compare compensation packages
-GET    /api/salary/locations/            - List available locations
-```
-
-### Response Format
-
-All endpoints return JSON with standard format:
-
-```json
-{
-  "success": true,
-  "data": { /* response object */ },
-  "message": "Operation successful",
-  "timestamp": "2026-07-19T10:30:00Z"
-}
-```
-
----
-
-## 🔐 Security
-
-### Implemented Security Measures
-
-✅ **JWT Authentication** – Secure stateless token-based authentication  
-✅ **Environment Variables** – Sensitive data protection via .env configuration  
-✅ **Secure Storage** – React Native Secure Store for token persistence  
-✅ **HTTP Headers** – Security headers configuration  
-✅ **CORS Policy** – Cross-origin request validation  
-
-### Production Security Checklist
-
-Add these settings to Django `settings.py` for production:
-
-```python
-# HTTPS & SSL
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-
-# Security Headers
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-X_FRAME_OPTIONS = 'DENY'
-
-# Content Security Policy
-SECURE_CONTENT_SECURITY_POLICY = {
-    "default-src": ("'self'",),
-    "script-src": ("'self'",),
-    "style-src": ("'self'", "'unsafe-inline'"),
-}
-
-# Additional
-DEBUG = False
-ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com']
-```
-
----
-
-## 📈 Performance Optimization
-
-### Frontend Optimization Strategies
-
-- **Component Memoization** – Use `React.memo()` for expensive render prevention
-- **Lazy Loading** – Implement code splitting for transaction lists and chart components
-- **Image Optimization** – Compress and cache receipt images
-- **State Management** – Minimize re-renders with proper Zustand store architecture
-- **Chart Optimization** – Virtual scrolling for large financial datasets
-
-### Backend Optimization Strategies
-
-- **Database Queries** – Use `select_related()` and `prefetch_related()` for efficient joins
-- **Caching Layer** – Redis caching for salary tier data and user preferences
-- **Rate Limiting** – API throttling for AI coach requests (e.g., 100 requests/hour)
-- **Pagination** – Implement cursor-based pagination for large transaction lists
-- **Indexing** – Database indexes on `user_id`, `transaction_date`, `category`
-
-### Monitoring & Profiling
-
-- Use Django Debug Toolbar for query analysis
-- Implement APM (Application Performance Monitoring) tools
-- Monitor backend response times and frontend render performance
-
----
-
-## 🚢 Deployment
-
-### Backend Deployment (Production)
-
-#### Using Gunicorn + Nginx
+### 1. Clone the repository
 
 ```bash
-# 1. Install production server
-pip install gunicorn
-
-# 2. Create systemd service file
-sudo nano /etc/systemd/system/finora.service
-
-[Unit]
-Description=Finora Django Application
-After=network.target
-
-[Service]
-User=www-data
-WorkingDirectory=/var/www/finora-backend
-ExecStart=/var/www/finora/venv/bin/gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4
-
-[Install]
-WantedBy=multi-user.target
-
-# 3. Enable and start service
-sudo systemctl enable finora
-sudo systemctl start finora
-
-# 4. Configure Nginx reverse proxy
-sudo nano /etc/nginx/sites-available/finora
-
-server {
-    listen 80;
-    server_name yourdomain.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-
-# 5. Enable Nginx site
-sudo ln -s /etc/nginx/sites-available/finora /etc/nginx/sites-enabled/
-sudo systemctl restart nginx
+git clone https://github.com/MehboobAli-Portfolio/Finora-App.git
+cd Finora-App
 ```
 
-#### Environment Configuration
+### 2. Install frontend dependencies
 
 ```bash
-export DEBUG=False
-export SECRET_KEY='your-very-secret-key-here'
-export DATABASE_URL='postgresql://user:password@db-host:5432/finora_prod'
-export ALLOWED_HOSTS='yourdomain.com,www.yourdomain.com'
-export AI_MODEL_PATH='/path/to/ai/model'
-```
-
-### Frontend Deployment (Mobile)
-
-#### Build & Publish with EAS (Expo Application Services)
-
-```bash
-# 1. Install EAS CLI
-npm install -g eas-cli
-
-# 2. Login to Expo account
-eas login
-
-# 3. Configure EAS project
-eas build:configure
-
-# 4. Build for production
-eas build --platform all --auto-submit
-
-# 5. Submit to app stores
-eas submit --platform ios
-eas submit --platform android
-```
-
-#### Web Deployment
-
-```bash
-# Build for web
-npm run build:web
-
-# Deploy to hosting (Vercel, Netlify, etc.)
-# Vercel:
-vercel deploy
-
-# Netlify:
-netlify deploy --prod --dir=.expo/web
-```
-
----
-
-## 🧪 Testing
-
-### Test Structure
-
-```
-finora-backend/
-├── tests/
-│   ├── test_users.py           # User authentication tests
-│   ├── test_transactions.py    # Transaction CRUD tests
-│   ├── test_ai_coach.py        # AI module tests
-│   ├── test_salary_reality.py  # Salary analysis tests
-│   └── fixtures/               # Test data fixtures
-```
-
-### Running Tests
-
-```bash
-# Backend - Run all tests
-cd finora-backend
-pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_users.py -v
-
-# Run with coverage report
-pytest tests/ --cov=. --cov-report=html
-
-# Frontend - Run component tests
 cd Finora
-npm test
+npm install
 ```
 
-### Test Coverage Goals
+### 3. Set up the backend environment
 
-- **Unit Tests:** 80%+ coverage for business logic
-- **Integration Tests:** API endpoint workflows
-- **E2E Tests:** Critical user journeys (register → add transaction → check goal)
-
----
-
-## 🤝 Development Workflow
-
-### Creating a Feature Branch
+From the repository root:
 
 ```bash
-git checkout -b feature/your-feature-name
+cd finora-backend
+python -m venv .venv
 ```
 
-### Commit Message Format
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**Types:**
-- `feat:` – New feature
-- `fix:` – Bug fix
-- `refactor:` – Code restructuring
-- `docs:` – Documentation update
-- `test:` – Test addition
-- `chore:` – Build/dependency updates
-
-**Example:**
+Activate the virtual environment:
 
 ```bash
-git commit -m "feat(ai-coach): Add spending pattern analysis
+# macOS / Linux
+source .venv/bin/activate
 
-- Implemented ML model for spending categorization
-- Added endpoint for monthly spending trends
-- Integrated with frontend dashboard
-
-Closes #42"
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
 ```
 
-### Pull Request Process
+Install backend dependencies:
 
-1. Push feature branch to remote
-   ```bash
-   git push origin feature/your-feature-name
-   ```
+```bash
+pip install -r requirements.txt
+```
 
-2. Create Pull Request on GitHub with:
-   - Clear title and description
-   - Link to related issues
-   - Screenshots/demos for UI changes
-   - Test coverage details
+### 4. Configure environment variables
 
-3. Address code review feedback
+Create a `.env` file in `finora-backend/` and set the values required by your local setup. For example:
 
-4. Merge to `main` branch after approval
+```env
+SECRET_KEY=your-strong-secret-key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.158
+CORS_ALLOWED_ORIGINS=http://localhost:8081,http://127.0.0.1:8081,http://192.168.1.158:8081
+```
 
----
+Optional Redis configuration:
 
-## 📞 Support & Contact
+```env
+REDIS_URL=redis://127.0.0.1:6379/1
+```
 
-- **Developer:** Mehboob Ali  
-- **Email:** mehboob56ali78@gmail.com  
-- **GitHub:** [@MehboobAli-Portfolio](https://github.com/MehboobAli-Portfolio)  
-- **Repository:** [Finora-App](https://github.com/MehboobAli-Portfolio/Finora-App)
+> **Tip:** Replace the example host and origin values with the addresses used by your development environment. Keep real secrets out of version control.
 
-### Reporting Issues
+### 5. Apply database migrations
 
-Please report bugs via [GitHub Issues](https://github.com/MehboobAli-Portfolio/Finora-App/issues) with:
-- Clear title and description
-- Steps to reproduce
-- Expected vs. actual behavior
-- Environment details (OS, app version, backend URL)
-- Screenshots or error logs
+While in `finora-backend/` with the virtual environment activated:
 
----
+```bash
+python manage.py migrate
+```
+
+### 6. Start the backend
+
+```bash
+python manage.py runserver 0.0.0.0:8000
+```
+
+### 7. Start the mobile app
+
+Open a second terminal:
+
+```bash
+cd Finora
+npx expo start
+```
+
+### Run the development stack together (Windows)
+
+The repository includes a PowerShell launcher:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File start.ps1
+```
+
+The script starts the Django backend, Expo frontend, and Celery workers when Redis is available.
+
+## 🔌 API Overview
+
+| Endpoint | Purpose |
+|---|---|
+| `/api/auth/` | Authentication, dashboard, profile, and password reset |
+| `/api/transactions/` | Expenses and transaction analytics |
+| `/api/goals/` | Savings goals |
+| `/api/investments/` | Investment holdings, market data, and analytics |
+| `/api/salary/` | Salary comparison and income planning |
+| `/api/ai/` | AI chat and financial insights |
+
+## ⚙️ Frontend Configuration
+
+The Expo app resolves the backend URL through `app.config.js` and `expo-constants`. The current default development URL is:
+
+```text
+http://192.168.1.158:8000/api/
+```
+
+To use a different backend, configure the `API_URL` environment variable for your Expo environment.
+
+## 🗺️ What's Included
+
+- Separate mobile frontend and Django backend
+- SQLite-backed local development by default
+- Optional Redis and Celery support for background tasks
+- Finance tools for expenses, goals, investments, and salary planning
+- An AI coach experience for financial guidance
 
 ## 📄 License
 
-This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for complete details.
+Finora is licensed under the MIT License. See [`LICENSE`](LICENSE) for details.
 
-You are free to use, modify, and distribute this software for personal or commercial purposes.
+## 🔗 Repository
 
----
+[MehboobAli-Portfolio/Finora-App](https://github.com/MehboobAli-Portfolio/Finora-App)
 
-## 🙏 Acknowledgments
+<div align="center">
 
-- **Expo Team** – For React Native development tools and services
-- **Django REST Framework** – Robust API development framework
-- **React Native Community** – Extensive component library and documentation
-- **Contributors & Testers** – For feedback and bug reports
+**Build healthier money habits with Finora.**
 
----
-
-**Last Updated:** July 19, 2026  
-**Status:** Active Development  
-**Version:** 1.0.0
+</div>
