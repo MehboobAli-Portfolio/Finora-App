@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
-  ActivityIndicator, Alert, Animated, Dimensions, Image, ScrollView,
+  ActivityIndicator, Alert, Dimensions, ScrollView,
   Modal, FlatList, TouchableWithoutFeedback, Platform
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Svg, G, Circle, Rect } from 'react-native-svg';
+import { Svg, G, Circle } from 'react-native-svg';
 import { salaryAPI } from '../../services/api';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const { height: SH } = Dimensions.get('window');
 
 // ─── Design tokens ────────────────────────────────────────────────────────
 const C = {
@@ -473,7 +473,7 @@ export default function SalaryRealityScreen() {
         </View>
 
         {data && (
-          <Animated.View style={styles.resultCard}>
+          <View style={styles.resultCard}>
             <View style={styles.tierHeader}>
               <LinearGradient colors={TIER_GRADIENT[data.living_tier] || [C.primary, C.accent]} style={styles.tierBadge}>
                 <Ionicons name={TIER_ICON[data.living_tier] || 'star'} size={24} color="#FFF" />
@@ -523,7 +523,7 @@ export default function SalaryRealityScreen() {
               <Ionicons name="bulb-outline" size={20} color={C.primary} />
               <Text style={styles.insightText}>{data.ai_insight}</Text>
             </View>
-          </Animated.View>
+          </View>
         )}
       </KeyboardAwareScrollView>
     </View>

@@ -10,8 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/currency';
 import { theme } from '../../theme';
-import { Pie, PolarChart, CartesianChart, Bar } from 'victory-native';
-import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
+import { Pie, PolarChart } from 'victory-native';
 
 const TYPE_META = {
   crypto: { label: 'Crypto', color: '#8B5CF6', icon: 'logo-bitcoin' },

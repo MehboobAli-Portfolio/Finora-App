@@ -162,7 +162,6 @@ export const goalsAPI = {
   update: (id, data) => api.put(`goals/${id}/`, data),
   delete: (id) => api.delete(`goals/${id}/`),
   addDeposit: (goalId, data) => api.post(`goals/${goalId}/deposits/`, data),
-  getDeposits: (goalId) => api.get(`goals/${goalId}/deposits/`),
 };
 
 // Investments
@@ -173,8 +172,6 @@ export const investmentsAPI = {
   update: (id, data) => api.patch(`investments/holdings/${id}/`, data),
   delete: (id) => api.delete(`investments/holdings/${id}/`),
   addUnits: (id, data) => api.post(`investments/holdings/${id}/add-units/`, data),
-  assets: (params) => api.get('investments/assets/', { params }),
-  priceHistory: (params) => api.get('investments/price-history/', { params }),
   getQuote: (symbol) => api.get(`investments/quote/?symbol=${symbol}`),
   getChartData: (symbol) => api.get(`investments/chart/?symbol=${symbol}`),
   refreshPrices: () => api.post('investments/refresh-prices/'),
@@ -189,61 +186,7 @@ export const aiAPI = {
     if (conversationId) payload.conversation_id = conversationId;
     return api.post('ai/chat/', payload);
   },
-
-  /**
-   * Stream a chat reply with a typewriter effect.
-   *
-   * React Native's fetch (Hermes) does NOT support ReadableStream / getReader(),
-   * so true SSE streaming is not possible in Expo Go. Instead we:
-   *   1. POST to the regular /ai/chat/ endpoint (fast JSON response)
-   *   2. Simulate word-by-word streaming client-side so it still looks instant
-   *
-   * @param {string}      message        - The user's message
-   * @param {string|null} conversationId - Existing conversation UUID or null
-   * @param {function}    onToken        - Called per word: (token: string) => void
-   * @param {function}    onDone         - Called when done: ({ intent, entities, conversation_id }) => void
-   * @param {function}    onError        - Called on error: (msg: string) => void
-   * @returns {function}                 - Abort function
-   */
-  chatStream: async (message, conversationId, onToken, onDone, onError) => {
-    let cancelled = false;
-
-    try {
-      const payload = { message };
-      if (conversationId) payload.conversation_id = conversationId;
-
-      // POST to JSON endpoint — dots show while waiting, typewriter starts on response
-      const response = await api.post('ai/chat/', payload);
-      const { reply, intent, entities, conversation_id } = response.data;
-
-      if (cancelled) return;
-
-      // Typewriter: emit 3 words per tick at 22ms — feels fast, ~135 words/sec visible
-      const words = reply.split(' ');
-      const BATCH = 3;
-      for (let i = 0; i < words.length; i += BATCH) {
-        if (cancelled) return;
-        const chunk = words.slice(i, i + BATCH).join(' ') + (i + BATCH < words.length ? ' ' : '');
-        onToken(chunk);
-        await new Promise((resolve) => setTimeout(resolve, 22));
-      }
-
-      if (!cancelled) {
-        onDone({ intent, entities, conversation_id });
-      }
-    } catch (err) {
-      if (!cancelled) {
-        const msg = err?.response?.data
-          ? Object.values(err.response.data).flat().join(' ')
-          : (err?.message ?? 'Connection error');
-        onError(msg);
-      }
-    }
-
-    return () => { cancelled = true; };
-  },
   getHistory: () => api.get('ai/chat/history/'),
-  getInsight: () => api.get('ai/insight/'),
 };
 
 // Salary Reality

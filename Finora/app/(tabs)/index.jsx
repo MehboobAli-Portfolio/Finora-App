@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { theme } from '../../theme';
-import { Pie, PolarChart, CartesianChart, Bar, Line } from 'victory-native';
+import { Pie, PolarChart, CartesianChart, Line } from 'victory-native';
 import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
 import { formatCurrency } from '../../utils/currency';
 

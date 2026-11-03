@@ -1,6 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { View, Platform, Image } from 'react-native';
+import { View, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const TAB_COLOR = '#2563EB';
 const INACTIVE = '#9CA3AF';
@@ -12,11 +11,7 @@ const TAB_ICONS = {
   'salary-reality': require('../../assets/icons/salary.png'),
   ai: require('../../assets/icons/ai.png'),
 };
-function TabIcon({
-  name,
-  focused,
-  route
-}) {
+function TabIcon({ focused, route }) {
   const iconSource = TAB_ICONS[route] || TAB_ICONS.index;
   
   return (

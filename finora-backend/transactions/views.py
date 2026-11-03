@@ -4,7 +4,6 @@ from rest_framework.decorators import api_view, permission_classes, parser_class
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from django.db.models import Sum
-from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
 from .models import Transaction

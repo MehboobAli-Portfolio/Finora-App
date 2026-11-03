@@ -6,21 +6,15 @@ Endpoints:
   POST /api/ai/chat/stream/    — streaming chat via Server-Sent Events (SSE)
   GET  /api/ai/chat/history/   — conversation history
 """
-import json
 import logging
-import time
 
-from django.http import StreamingHttpResponse
 from django.utils import timezone
 from django.db.models import Sum, Case, When, DecimalField, Value
-from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework.exceptions import AuthenticationFailed
 
 from transactions.models import Transaction
 from transactions.serializers import TransactionSerializer
@@ -256,134 +250,6 @@ def chat_view(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-
-@csrf_exempt
-def chat_stream_view(request):
-    """
-    Streaming chat endpoint using Server-Sent Events (SSE).
-
-    Method: POST
-    Auth:   JWT Bearer token in Authorization header (same token as other endpoints)
-    Body:   { "message": "...", "conversation_id": "..." (optional) }
-
-    SSE event stream format:
-        data: {"type": "token", "token": "word "}\n\n
-        ...
-        data: {"type": "done", "intent": "...", "entities": {}, "conversation_id": "..."}\n\n
-        data: {"type": "error", "message": "..."}\n\n
-
-    The frontend reads the stream and appends each token to the message bubble
-    in real time, creating a ChatGPT-like typewriter effect.
-    """
-    if request.method != 'POST':
-        from django.http import HttpResponseNotAllowed
-        return HttpResponseNotAllowed(['POST'])
-
-    # ── Authenticate via JWT (can't use @permission_classes on non-DRF views) ──
-    auth = JWTAuthentication()
-    try:
-        result = auth.authenticate(request)
-        if result is None:
-            raise AuthenticationFailed('Authentication credentials were not provided.')
-        user, _ = result
-    except AuthenticationFailed as exc:
-        def _auth_error():
-            yield f'data: {json.dumps({"type": "error", "message": str(exc)})}\n\n'
-        return StreamingHttpResponse(
-            _auth_error(),
-            content_type='text/event-stream',
-            status=401,
-        )
-
-    # ── Parse body ────────────────────────────────────────────────────────────
-    try:
-        body = json.loads(request.body or '{}')
-    except (json.JSONDecodeError, ValueError):
-        body = {}
-
-    message_text    = (body.get('message') or '').strip()
-    conversation_id = body.get('conversation_id')
-
-    if not message_text:
-        def _msg_error():
-            yield f'data: {json.dumps({"type": "error", "message": "message is required"})}\n\n'
-        return StreamingHttpResponse(_msg_error(), content_type='text/event-stream', status=400)
-
-    # ── SSE generator ─────────────────────────────────────────────────────────
-    def event_stream():
-        # ── 1. Resolve / create conversation ─────────────────────────────
-        nonlocal conversation_id
-        if conversation_id:
-            try:
-                conversation = AIConversation.objects.get(id=conversation_id, user=user)
-            except AIConversation.DoesNotExist:
-                yield f'data: {json.dumps({"type": "error", "message": "Conversation not found"})}\n\n'
-                return
-        else:
-            title = message_text[:50] + ('...' if len(message_text) > 50 else '')
-            conversation = AIConversation.objects.create(user=user, title=title)
-            conversation_id = str(conversation.id)
-
-        # ── 2. Persist user message ───────────────────────────────────────
-        AIMessage.objects.create(
-            conversation=conversation,
-            user=user,
-            role='user',
-            content=message_text,
-        )
-
-        # ── 3. Build chat history ─────────────────────────────────────────
-        recent = conversation.messages.order_by('-created_at')[:15]
-        chat_history = _cap_chat_history([
-            {'role': m.role, 'content': m.content, 'intent': m.intent}
-            for m in reversed(recent)
-        ])
-
-        # ── 4. Generate full reply ────────────────────────────────────────
-        try:
-            engine = _build_ai_engine(
-                user,
-                include_investments=True,
-                include_categories=True,
-                include_recent=True,
-            )
-            router = SmartRouter(engine)
-            reply, intent, entities = router.process_message(
-                message_text, chat_history=chat_history
-            )
-        except Exception:
-            logger.exception('AI stream generation failed')
-            yield f'data: {json.dumps({"type": "error", "message": "AI service temporarily unavailable."})}\n\n'
-            return
-
-        # ── 5. Stream reply word-by-word ──────────────────────────────────
-        # Split on spaces but preserve newlines as explicit tokens so the
-        # frontend can reconstruct the formatted message faithfully.
-        words = reply.split(' ')
-        for i, word in enumerate(words):
-            # Re-attach the space that split() removed (except after the last word)
-            token = word if i == len(words) - 1 else word + ' '
-            yield f'data: {json.dumps({"type": "token", "token": token})}\n\n'
-
-        # ── 6. Persist assistant message ─────────────────────────────────
-        AIMessage.objects.create(
-            conversation=conversation,
-            user=user,
-            role='assistant',
-            content=reply,
-            intent=intent,
-            entities=entities,
-        )
-
-        # ── 7. Send done signal with metadata ────────────────────────────
-        yield f'data: {json.dumps({"type": "done", "intent": intent, "entities": entities, "conversation_id": conversation_id})}\n\n'
-
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-    # SSE-required headers
-    response['Cache-Control']               = 'no-cache'
-    response['X-Accel-Buffering']           = 'no'   # Disable Nginx buffering
-    response['Access-Control-Allow-Origin'] = '*'    # Handled by django-cors-headers in prod
-    return response
 
 
 @api_view(['GET'])

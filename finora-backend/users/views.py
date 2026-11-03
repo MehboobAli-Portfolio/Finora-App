@@ -12,7 +12,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
 from django.db.models import Sum, Case, When, DecimalField, Value
-from django.db.models.functions import TruncWeek, TruncDate
+from django.db.models.functions import TruncWeek
 from django.utils import timezone
 from datetime import timedelta
 
