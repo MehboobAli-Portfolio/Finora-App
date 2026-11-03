@@ -1,4 +1,4 @@
-﻿"""
+"""
 Django settings for finora_backend project.
 """
 from pathlib import Path
@@ -22,13 +22,13 @@ if not SECRET_KEY or SECRET_KEY == 'your-super-secret-key-change-this-in-product
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 # SECURITY WARNING: define allowed hosts explicitly in production
-_allowed_hosts = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,192.168.1.158')
+_allowed_hosts = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,192.168.18.27')
 ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(',') if h.strip()]
 
-_csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://127.0.0.1:8000,http://192.168.1.158:8000')
+_csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://127.0.0.1:8000,http://192.168.18.27:8000')
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]
 
-_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8081,http://127.0.0.1:8081,http://192.168.1.158:8081')
+_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:8081,http://127.0.0.1:8081,http://192.168.18.27:8081')
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
@@ -60,6 +60,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -110,7 +111,9 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+WHITENOISE_USE_FINDERS = True  # serve from app dirs (admin, etc.) in dev
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 

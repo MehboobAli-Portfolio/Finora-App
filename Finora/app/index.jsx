@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useEffect } from 'react';
 
 export default function WelcomeScreen() {
+  const { height } = useWindowDimensions();
   const { user, loading } = useAuth();
 
   useEffect(() => {

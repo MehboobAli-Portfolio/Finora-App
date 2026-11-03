@@ -58,7 +58,7 @@ if (Test-Redis) {
 Write-Host ""
 Write-Host "All services started." -ForegroundColor Green
 Write-Host ""
-Write-Host "  Backend:  http://192.168.1.158:8000/api/"    -ForegroundColor White
+Write-Host "  Backend:  http://192.168.18.27:8000/api/"    -ForegroundColor White
 Write-Host "  Admin:    http://127.0.0.1:8000/admin/"       -ForegroundColor White
 Write-Host "  Frontend: scan the QR code in the Expo window" -ForegroundColor White
 Write-Host ""

@@ -10,8 +10,7 @@ import { investmentsAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import { theme } from '../../theme';
-import { CartesianChart, Line } from 'victory-native';
-import { LinearGradient, vec } from '@shopify/react-native-skia';
+import { TrendChart } from '../../components/NativeCharts';
 
 const TYPE_META = {
   stocks:       { icon: 'stats-chart',    color: '#2563EB',  label: 'Stocks' },
@@ -133,25 +132,8 @@ export default function InvestmentDetailScreen() {
                 <ActivityIndicator size="small" color={theme.colors.primary} />
                 <Text style={{ marginTop: 8, color: '#6B7280', fontSize: 12 }}>Loading 30d history...</Text>
               </View>
-            ) : chartData.length > 0 ? (
-              <View style={{ height: 220 }}>
-                <CartesianChart data={chartData} xKey="x" yKeys={["y"]}>
-                  {({ points, chartBounds }) => (
-                    <Line
-                      points={points.y}
-                      color={isPositive ? "#10B981" : "#EF4444"}
-                      strokeWidth={3}
-                      animate={{ type: "spring" }}
-                    >
-                      <LinearGradient
-                        start={vec(0, 0)}
-                        end={vec(0, chartBounds.bottom)}
-                        colors={[(isPositive ? "#10B981" : "#EF4444") + "40", "transparent"]}
-                      />
-                    </Line>
-                  )}
-                </CartesianChart>
-              </View>
+             ) : chartData.length > 0 ? (
+               <TrendChart title="30-day Price History" data={chartData} currency={user?.currency} color={isPositive ? '#10B981' : '#EF4444'} />
             ) : (
               <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
                 <Ionicons name="bar-chart-outline" size={32} color="#D1D5DB" />

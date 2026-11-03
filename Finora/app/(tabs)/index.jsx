@@ -10,9 +10,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { theme } from '../../theme';
-import { Pie, PolarChart, CartesianChart, Line } from 'victory-native';
-import { LinearGradient as SkiaGradient, vec } from '@shopify/react-native-skia';
 import { formatCurrency } from '../../utils/currency';
+import { CategoryChart, TrendChart } from '../../components/NativeCharts';
 
 const CATEGORY_ICONS = {
   food: 'fast-food',
@@ -330,103 +329,17 @@ export default function HomeScreen() {
           })()}
         </View>
 
-        {/* Spending by Category Chart */}
-        {dashboard?.spending_by_category?.length > 0 && (
-          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Spending by Category</Text>
-            <View style={{ height: 200 }}>
-              <PolarChart
-                data={dashboard.spending_by_category.map(c => ({...c, color: CATEGORY_COLORS[c.label] || CATEGORY_COLORS.other}))}
-                colorKey="color"
-                labelKey="label"
-                valueKey="value"
-              >
-                <Pie.Chart innerRadius={60}>
-                  {({ slice }) => <Pie.Slice />}
-                </Pie.Chart>
-              </PolarChart>
-              {/* Center total text */}
-              <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Total</Text>
-                <Text style={{ fontSize: 16, color: '#111827', fontWeight: '800' }}>
-                  {formatCurrency(dashboard.spending_by_category.reduce((sum, item) => sum + item.value, 0), user?.currency)}
-                </Text>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, justifyContent: 'center', gap: 12 }}>
-              {dashboard.spending_by_category.map((cat, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: CATEGORY_COLORS[cat.label] || CATEGORY_COLORS.other }} />
-                  <Text style={{ fontSize: 12, color: '#4B5563', textTransform: 'capitalize' }}>{cat.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
+         {/* Category breakdowns use native React Native views so they work in Expo Go. */}
+         {dashboard?.spending_by_category?.length > 0 && (
+           <CategoryChart title="Spending by Category" data={dashboard.spending_by_category} currency={user?.currency} />
+         )}
+         {dashboard?.income_by_category?.length > 0 && (
+           <CategoryChart title="Income by Category" data={dashboard.income_by_category} currency={user?.currency} />
+         )}
 
-        {/* Income by Category Chart */}
-        {dashboard?.income_by_category?.length > 0 && (
-          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Income by Category</Text>
-            <View style={{ height: 200 }}>
-              <PolarChart
-                data={dashboard.income_by_category.map(c => ({...c, color: CATEGORY_COLORS[c.label] || CATEGORY_COLORS.other}))}
-                colorKey="color"
-                labelKey="label"
-                valueKey="value"
-              >
-                <Pie.Chart innerRadius={60}>
-                  {({ slice }) => <Pie.Slice />}
-                </Pie.Chart>
-              </PolarChart>
-              {/* Center total text */}
-              <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Total</Text>
-                <Text style={{ fontSize: 16, color: '#111827', fontWeight: '800' }}>
-                  {formatCurrency(dashboard.income_by_category.reduce((sum, item) => sum + item.value, 0), user?.currency)}
-                </Text>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, justifyContent: 'center', gap: 12 }}>
-              {dashboard.income_by_category.map((cat, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: CATEGORY_COLORS[cat.label] || CATEGORY_COLORS.other }} />
-                  <Text style={{ fontSize: 12, color: '#4B5563', textTransform: 'capitalize' }}>{cat.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Weekly Spending Trend Chart */}
-        {dashboard?.weekly_spending?.length > 0 && (
-          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 16 }}>Weekly Spending Trend</Text>
-            <View style={{ height: 180 }}>
-              <CartesianChart 
-                data={dashboard.weekly_spending.map((w, i) => ({ x: i, y: w.total, date: w.date }))} 
-                xKey="x" 
-                yKeys={["y"]}
-                domainPadding={{ left: 20, right: 20, top: 20 }}
-              >
-                {({ points, chartBounds }) => (
-                  <Line
-                    points={points.y}
-                    color="#8B5CF6"
-                    strokeWidth={3}
-                    animate={{ type: "spring" }}
-                  >
-                    <SkiaGradient
-                      start={vec(0, 0)}
-                      end={vec(0, chartBounds.bottom)}
-                      colors={["#8B5CF640", "transparent"]}
-                    />
-                  </Line>
-                )}
-              </CartesianChart>
-            </View>
-          </View>
-        )}
+         {dashboard?.weekly_spending?.length > 0 && (
+           <TrendChart title="Weekly Spending Trend" data={dashboard.weekly_spending} currency={user?.currency} />
+         )}
 
         {/* Recent Transactions */}
         <View style={{ marginHorizontal: 20, marginBottom: 16 }}>
