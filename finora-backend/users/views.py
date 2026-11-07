@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
@@ -248,8 +250,10 @@ def change_password_view(request):
     if new_password != confirm_password:
         return Response({'error': 'New passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if len(new_password) < 6:
-        return Response({'error': 'Password must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as e:
+        return Response({'error': e.messages}, status=status.HTTP_400_BAD_REQUEST)
 
     user.set_password(new_password)
     user.save()

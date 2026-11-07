@@ -10,7 +10,7 @@ class GoalListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'category']
-    ordering_fields = ['created_at', 'target_date', 'target_amount']
+    ordering_fields = ['deadline', 'target_amount', 'current_amount', 'name']
 
     def get_queryset(self):
         queryset = Goal.objects.filter(user=self.request.user)

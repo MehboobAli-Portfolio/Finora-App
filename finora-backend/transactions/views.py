@@ -1,4 +1,4 @@
-﻿from rest_framework import generics, filters
+from rest_framework import generics, filters
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -87,27 +87,34 @@ def scan_receipt_view(request):
     results = reader.readtext(image_bytes, detail=0)
     raw_text = " ".join(results).lower()
 
-    # ── Multi-currency amount extraction ──────────────────────────────
-    # Matches: $100.50, Rs 1500, Rs.1500, PKR 25000, ₹500, 1,500.00,
-    # and plain large numbers like 25000 (common in PKR receipts)
-    amount_patterns = [
-        r'(?:rs\.?|pkr|₹|\$|inr|aed|sar)\s*([\d,]+(?:\.\d{1,2})?)',  # Currency prefix
-        r'([\d,]+\.\d{2})',                                            # Decimal amounts
-        r'total\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)',                   # "Total: 1500"
-        r'amount\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)',                  # "Amount: 1500"
-        r'grand\s*total\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)',           # "Grand Total"
+    # ── Prioritized amount extraction ─────────────────────────────────
+    # Prioritizes explicit totals first so item codes or subtotals aren't mistaken for total
+    total_patterns = [
+        r'(?:grand\s*total|net\s*total|total\s*due|balance\s*due)\s*[:\-]?\s*(?:rs\.?|pkr|₹|\$|inr|aed|sar)?\s*([\d,]+(?:\.\d{1,2})?)',
+        r'total\s*[:\-]?\s*(?:rs\.?|pkr|₹|\$|inr|aed|sar)?\s*([\d,]+(?:\.\d{1,2})?)',
+        r'amount\s*(?:due)?\s*[:\-]?\s*(?:rs\.?|pkr|₹|\$|inr|aed|sar)?\s*([\d,]+(?:\.\d{1,2})?)',
+    ]
+    currency_patterns = [
+        r'(?:rs\.?|pkr|₹|\$|inr|aed|sar)\s*([\d,]+(?:\.\d{1,2})?)',
+    ]
+    fallback_patterns = [
+        r'([\d,]+\.\d{2})',
     ]
 
-    max_amount = 0.0
-    for pattern in amount_patterns:
-        matches = re.findall(pattern, raw_text)
-        for amt_str in matches:
-            try:
-                val = float(amt_str.replace(',', ''))
-                if val > max_amount:
-                    max_amount = val
-            except ValueError:
-                pass
+    detected_amount = 0.0
+    for pattern_group in (total_patterns, currency_patterns, fallback_patterns):
+        valid_vals = []
+        for pattern in pattern_group:
+            for amt_str in re.findall(pattern, raw_text):
+                try:
+                    val = float(amt_str.replace(',', ''))
+                    if 0 < val < 100000000:
+                        valid_vals.append(val)
+                except ValueError:
+                    pass
+        if valid_vals:
+            detected_amount = max(valid_vals)
+            break
 
     # ── Category detection with local + international merchants ───────
     category = "other"
@@ -144,7 +151,7 @@ def scan_receipt_view(request):
         category = "health"
 
     return Response({
-        'amount': max_amount,
+        'amount': detected_amount,
         'category': category,
         'raw_text': raw_text
     })
