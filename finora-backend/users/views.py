@@ -258,3 +258,16 @@ def change_password_view(request):
     user.set_password(new_password)
     user.save()
     return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_account_view(request):
+    """
+    DELETE /api/auth/account/
+    Permanently deletes the authenticated user and all related data.
+    Required by Apple App Store and Google Play store policies.
+    """
+    user = request.user
+    user.delete()
+    return Response({'message': 'Account deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)

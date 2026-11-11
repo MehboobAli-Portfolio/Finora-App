@@ -92,8 +92,12 @@ WSGI_APPLICATION = 'wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE':   os.getenv('DB_ENGINE',   'django.db.backends.sqlite3'),
+        'NAME':     os.getenv('DB_NAME',     str(BASE_DIR / 'db.sqlite3')),
+        'USER':     os.getenv('DB_USER',     ''),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST':     os.getenv('DB_HOST',     ''),
+        'PORT':     os.getenv('DB_PORT',     ''),
     }
 }
 
@@ -118,6 +122,23 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {'format': '{levelname} {asctime} {module} {message}', 'style': '{'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'verbose'},
+    },
+    'root': {'handlers': ['console'], 'level': os.getenv('LOG_LEVEL', 'WARNING')},
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'), 'propagate': False},
+        'ai_coach': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}
 
 # Django REST Framework
 REST_FRAMEWORK = {

@@ -166,6 +166,28 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account, ledger, and goals. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await authAPI.deleteAccount();
+              await logout();
+            } catch {
+              Alert.alert('Error', 'Failed to delete account. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const filteredCurrencies = CURRENCY_LIST.filter(c =>
     c.code.toLowerCase().includes(currencySearch.toLowerCase()) ||
     c.label.toLowerCase().includes(currencySearch.toLowerCase())
@@ -355,6 +377,15 @@ export default function ProfileScreen() {
           >
             <Ionicons name="log-out-outline" size={20} color="#EF4444" />
             <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>Sign Out</Text>
+          </TouchableOpacity>
+
+          {/* Delete Account (Mandatory for App Store & Google Play) */}
+          <TouchableOpacity
+            style={{ alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingVertical: 8 }}
+            onPress={handleDeleteAccount}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#94A3B8' }}>Delete Account</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>

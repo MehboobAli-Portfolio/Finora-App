@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     RegisterView, ProfileView, dashboard_view,
     password_reset_request_view, password_reset_confirm_view,
-    logout_view, change_password_view
+    logout_view, change_password_view, delete_account_view
 )
 
 urlpatterns = [
@@ -16,4 +16,5 @@ urlpatterns = [
     path('password-reset/confirm/',  password_reset_confirm_view, name='password-reset-confirm'),
     path('change-password/', change_password_view,         name='change-password'),
     path('logout/',    logout_view,                  name='logout'),
+    path('account/',   delete_account_view,          name='delete-account'),  # DELETE — store policy
 ]

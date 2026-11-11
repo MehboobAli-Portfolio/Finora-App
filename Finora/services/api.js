@@ -139,6 +139,7 @@ export const authAPI = {
   passwordResetRequest: (data) => api.post('auth/password-reset/', data),
   passwordResetConfirm: (data) => api.post('auth/password-reset/confirm/', data),
   logout: (data) => api.post('auth/logout/', data),
+  deleteAccount: () => api.delete('auth/account/'),
 };
 
 // Expenses
