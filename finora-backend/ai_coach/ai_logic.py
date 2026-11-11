@@ -91,18 +91,29 @@ def get_market_data():
     # ── 3. Live yfinance call (only when both caches are cold/stale) ──────
     try:
         import yfinance as yf
-        spy  = yf.Ticker('SPY').fast_info
-        btc  = yf.Ticker('BTC-USD').fast_info
-        qqq  = yf.Ticker('QQQ').fast_info
-        gold = yf.Ticker('GC=F').fast_info
+        import concurrent.futures
 
-        data = {
-            'spy_price':  spy.last_price,
-            'btc_price':  btc.last_price,
-            'qqq_price':  qqq.last_price,
-            'gold_price': gold.last_price,
-            'fetched_at': now,
-        }
+        def _fetch():
+            spy  = yf.Ticker('SPY').fast_info
+            btc  = yf.Ticker('BTC-USD').fast_info
+            qqq  = yf.Ticker('QQQ').fast_info
+            gold = yf.Ticker('GC=F').fast_info
+            return {
+                'spy_price':  spy.last_price,
+                'btc_price':  btc.last_price,
+                'qqq_price':  qqq.last_price,
+                'gold_price': gold.last_price,
+                'fetched_at': now,
+            }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_fetch)
+            try:
+                data = future.result(timeout=2.5)  # shortcut: 2.5 s hard cap; raise on slow provider
+            except concurrent.futures.TimeoutError:
+                logger.warning('yfinance live fetch timed out — using stale cache')
+                return _MODULE_MARKET_CACHE
+
         _MODULE_MARKET_CACHE = data
         _MODULE_MARKET_CACHE_TIME = now
         return data
@@ -302,7 +313,14 @@ class FinoraAI:
         if ticker:
             try:
                 ticker_obj = yf.Ticker(ticker)
-                info = ticker_obj.fast_info
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(lambda: ticker_obj.fast_info)
+                    try:
+                        info = future.result(timeout=2.5)  # shortcut: 2.5 s hard cap; raise on slow provider
+                    except concurrent.futures.TimeoutError:
+                        logger.warning('yfinance ticker lookup timed out for %s', ticker)
+                        raise Exception('timeout')
                 price = getattr(info, 'last_price', None)
                 prev_close = getattr(info, 'previous_close', None)
                 

@@ -165,19 +165,28 @@ export default function CoachScreen() {
       if (conversation_id && !convId) setConvId(conversation_id);
       setBusy(false);
 
-      // 2. Typewriter — REPLACE the typing bubble in-place every tick
-      //    No bubble ever disappears; it just grows. Zero gap.
+      // 2. Chunk animation — update every ~80 ms so the reply feels alive
+      //    without hammering state on every single word (was 18 ms/word ≈ 1.8 s/100 words).
       const words = reply.split(' ');
       let built = '';
+      let pending = '';
+      const CHUNK_MS = 80;
+      let lastFlush = Date.now();
+
       for (let i = 0; i < words.length; i++) {
         if (cancelRef.current) return;
-        built += (i === 0 ? '' : ' ') + words[i];
-        const snap = built; // capture for closure
-        setMsgs(prev => prev.map(m =>
-          m.id === TYPING_ID ? { ...m, text: snap, typing: true } : m
-        ));
-        if (i % 8 === 0) scrollDown();
-        await sleep(18);
+        pending += (pending ? ' ' : '') + words[i];
+        const now = Date.now();
+        if (now - lastFlush >= CHUNK_MS || i === words.length - 1) {
+          built += (built ? ' ' : '') + pending;
+          pending = '';
+          lastFlush = now;
+          const snap = built;
+          setMsgs(prev => prev.map(m =>
+            m.id === TYPING_ID ? { ...m, text: snap, typing: true } : m
+          ));
+          scrollDown();
+        }
       }
 
       if (cancelRef.current) return;
