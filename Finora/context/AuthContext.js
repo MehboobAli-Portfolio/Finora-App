@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { authAPI } from '../services/api';
+import { queryClient } from '../services/queryClient';
 
 const AuthContext = createContext(null);
 
@@ -64,6 +65,7 @@ export function AuthProvider({ children }) {
       await SecureStore.deleteItemAsync('access_token');
       await SecureStore.deleteItemAsync('refresh_token');
       await SecureStore.deleteItemAsync('user_data');
+      queryClient.clear();
       setUser(null);
     }
   };
@@ -79,6 +81,7 @@ export function AuthProvider({ children }) {
       await SecureStore.deleteItemAsync('access_token');
       await SecureStore.deleteItemAsync('refresh_token');
       await SecureStore.deleteItemAsync('user_data');
+      queryClient.clear();
       setUser(null);
     }
   };

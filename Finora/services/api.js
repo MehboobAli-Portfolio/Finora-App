@@ -95,7 +95,11 @@ api.interceptors.response.use(
       try {
         const refreshToken = await SecureStore.getItemAsync('refresh_token');
         if (!refreshToken) {
-          throw new Error('No refresh token');
+          processQueue(error, null);
+          await SecureStore.deleteItemAsync('access_token');
+          await SecureStore.deleteItemAsync('refresh_token');
+          await SecureStore.deleteItemAsync('user_data');
+          return Promise.reject(error);
         }
         const response = await axios.post(`${BASE_URL}auth/refresh/`, {
           refresh: refreshToken,
@@ -114,6 +118,7 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         await SecureStore.deleteItemAsync('access_token');
         await SecureStore.deleteItemAsync('refresh_token');
+        await SecureStore.deleteItemAsync('user_data');
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
