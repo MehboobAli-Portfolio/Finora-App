@@ -17,6 +17,7 @@ from django.db.models import Sum, Case, When, DecimalField, Value
 from django.db.models.functions import TruncWeek
 from django.utils import timezone
 from datetime import timedelta
+import calendar
 
 from transactions.models import Transaction
 from goals.models import Goal
@@ -123,16 +124,62 @@ def dashboard_view(request):
     weekly = weekly_qs.annotate(week=TruncWeek('date')).values('week').annotate(total=Sum('amount')).order_by('week')
     weekly_spending = [{"date": str(w['week']) if w['week'] else '', "total": float(w['total'])} for w in weekly]
 
+    # Additional Analytics & Health Metrics
+    m_inc = float(monthly_income)
+    m_exp = float(monthly_expenses)
+    savings_rate = round(((m_inc - m_exp) / m_inc) * 100, 1) if m_inc > 0 else 0.0
+    net_worth = round(float(balance) + float(total_investments), 2)
+
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    days_remaining = max(1, days_in_month - now.day + 1)
+    budget_val = float(user.monthly_budget)
+    budget_remaining = max(0.0, budget_val - m_exp) if budget_val > 0 else 0.0
+    daily_safe_spend = round(budget_remaining / days_remaining, 2) if budget_val > 0 else 0.0
+
+    score = 70
+    if budget_val > 0:
+        ratio = m_exp / budget_val
+        if ratio <= 0.7: score += 15
+        elif ratio <= 1.0: score += 5
+        else: score -= 15
+    if savings_rate >= 20: score += 15
+    elif savings_rate > 0: score += 5
+    elif savings_rate < 0: score -= 10
+    if goals_count > 0:
+        score += int((completed_goals / goals_count) * 10)
+    health_score = max(10, min(100, score))
+
+    active_goals_qs = Goal.objects.filter(user=user, status='active').order_by('-deadline')[:3]
+    active_goals = [
+        {
+            'id': str(g.id),
+            'name': g.name,
+            'target_amount': float(g.target_amount),
+            'current_amount': float(g.current_amount),
+            'progress_pct': g.progress_pct,
+            'category': g.category,
+            'deadline': str(g.deadline) if g.deadline else None,
+        }
+        for g in active_goals_qs
+    ]
+
     return Response({
         'balance': balance,
-        'total_income': float(monthly_income),
-        'total_expenses': float(monthly_expenses),
+        'net_worth': net_worth,
+        'total_income': m_inc,
+        'total_expenses': m_exp,
         'alltime_income': float(total_in),
         'alltime_expenses': float(total_ex),
-        'total_investments': total_investments,
+        'total_investments': float(total_investments),
+        'savings_rate': savings_rate,
         'goals_count': goals_count,
         'completed_goals': completed_goals,
-        'monthly_budget': float(user.monthly_budget),
+        'active_goals': active_goals,
+        'monthly_budget': budget_val,
+        'budget_remaining': budget_remaining,
+        'daily_safe_spend': daily_safe_spend,
+        'days_remaining_in_month': days_remaining,
+        'financial_health_score': health_score,
         'recent_transactions': recent_data,
         'spending_by_category': spending_by_category,
         'income_by_category': income_by_category,

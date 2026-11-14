@@ -88,6 +88,7 @@ export function DailyBarChart({ title, data, color }) {
 
 const styles = {
   card: {
+    marginHorizontal: 20,
     marginBottom: 16,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,

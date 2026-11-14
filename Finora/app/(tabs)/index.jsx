@@ -2,9 +2,10 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import React, { useState, useCallback } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { View, Text, RefreshControl, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
+import { View, Text, RefreshControl, ActivityIndicator, TouchableOpacity, Image, Modal, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -48,9 +49,11 @@ const CATEGORY_COLORS = {
 };
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const setDashboardData = useFinanceStore(state => state.setDashboardData);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const { data: dashboard, isLoading: loading, refetch, isRefetching } = useQuery({
     queryKey: ['dashboard'],
@@ -83,6 +86,68 @@ export default function HomeScreen() {
     refetch();
   };
 
+  const handlePickAvatar = () => {
+    Alert.alert('Profile Photo', 'Choose an option', [
+      {
+        text: 'Take Photo',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Camera permission is required.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets && result.assets.length > 0) {
+            uploadAvatar(result.assets[0]);
+          }
+        },
+      },
+      {
+        text: 'Choose from Library',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets && result.assets.length > 0) {
+            uploadAvatar(result.assets[0]);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const uploadAvatar = async (asset) => {
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      const filename = asset.uri.split('/').pop() || 'avatar.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      formData.append('avatar', {
+        uri: asset.uri,
+        name: filename,
+        type,
+      });
+
+      await authAPI.updateProfile(formData);
+      await refreshUser();
+      refetch();
+      Alert.alert('Success', 'Profile photo updated successfully!');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
 
   if (loading && !dashboard) {
     return (
@@ -108,38 +173,52 @@ export default function HomeScreen() {
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <TouchableOpacity 
-              onPress={() => router.push('/(tabs)/profile')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}
+              onPress={() => setProfileModalVisible(true)}
+              activeOpacity={0.8}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 16, flex: 1 }}
             >
               <View style={{ 
-                width: 80, 
-                height: 80, 
-                borderRadius: 15, 
+                width: 72, 
+                height: 72, 
+                borderRadius: 20, 
                 backgroundColor: '#FFFFFF', 
                 justifyContent: 'center', 
                 alignItems: 'center', 
                 overflow: 'hidden',
-                borderWidth: 4,
-                borderColor: 'rgba(255,255,255,0.25)',
+                borderWidth: 3,
+                borderColor: 'rgba(255,255,255,0.3)',
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: 6 },
+                shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.2,
-                shadowRadius: 10,
-                elevation: 8
+                shadowRadius: 8,
+                elevation: 6
               }}>
-                {user?.profile_picture ? (
-                  <Image source={{ uri: user.profile_picture }} style={{ width: '100%', height: '100%' }} />
+                {(user?.avatar || user?.profile_picture) ? (
+                  <Image source={{ uri: user.avatar || user.profile_picture }} style={{ width: '100%', height: '100%' }} />
                 ) : (
-                  <Ionicons name="person" size={57} color="#2563EB" />
+                  <Ionicons name="person" size={48} color="#2563EB" />
+                )}
+                {uploadingAvatar && (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  </View>
                 )}
               </View>
-              <View>
-                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500' }}>Good day, 👋</Text>
-                <Text style={{ fontSize: 26, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 }}>{user?.full_name || user?.username || 'Welcome'}</Text>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500' }}>Good day, 👋</Text>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '700' }}>Settings</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 }} numberOfLines={1}>{user?.full_name || user?.username || 'Welcome'}</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}>
-              <Ionicons name="notifications-outline" size={26} color="#FFFFFF" />
+            <TouchableOpacity 
+              onPress={() => setProfileModalVisible(true)}
+              style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -241,6 +320,82 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>Goals Done</Text>
           </View>
         </View>
+
+        {/* Financial Health & Net Worth Cards */}
+        <View style={{ flexDirection: 'row', marginHorizontal: 20, gap: 12, marginBottom: 16 }}>
+          <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600' }}>Net Worth</Text>
+              <Ionicons name="shield-checkmark" size={16} color="#059669" />
+            </View>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827' }}>
+              {formatCurrency(dashboard?.net_worth ?? ((Number(dashboard?.balance || 0)) + (Number(dashboard?.total_investments || 0))), user?.currency)}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#059669', fontWeight: '600', marginTop: 4 }}>
+              Savings Rate: {dashboard?.savings_rate ?? 0}%
+            </Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600' }}>Health Score</Text>
+              <Ionicons name="heart-circle" size={18} color="#2563EB" />
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#2563EB' }}>
+                {dashboard?.financial_health_score ?? 70}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '600' }}>/ 100</Text>
+            </View>
+            <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '500', marginTop: 4 }}>
+              {Number(dashboard?.financial_health_score ?? 70) >= 80 ? 'Excellent' : Number(dashboard?.financial_health_score ?? 70) >= 60 ? 'Healthy' : 'Needs Attention'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Daily Safe Spend Banner */}
+        {dashboard?.daily_safe_spend !== undefined && (
+          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#EFF6FF', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#BFDBFE' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="wallet-outline" size={18} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: '#1E40AF', fontWeight: '600', textTransform: 'uppercase' }}>Daily Safe Spend</Text>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#1E3A8A' }}>
+                  {formatCurrency(dashboard?.daily_safe_spend, user?.currency)}
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: '#6B7280' }}> / day ({dashboard?.days_remaining_in_month ?? 15}d left)</Text>
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#3B82F6" />
+          </View>
+        )}
+
+        {/* Active Goals Card */}
+        {dashboard?.active_goals?.length > 0 && (
+          <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>Active Goals</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/goals')}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#2563EB' }}>Manage</Text>
+              </TouchableOpacity>
+            </View>
+            {dashboard.active_goals.map((goal, idx) => (
+              <View key={goal.id || idx} style={{ marginBottom: idx < dashboard.active_goals.length - 1 ? 12 : 0 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>{goal.name}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>{goal.progress ?? 0}%</Text>
+                </View>
+                <View style={{ height: 6, backgroundColor: '#F3F4F6', borderRadius: 3, overflow: 'hidden' }}>
+                  <View style={{ height: '100%', width: `${Math.min(100, goal.progress ?? 0)}%`, backgroundColor: '#10B981', borderRadius: 3 }} />
+                </View>
+                <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>
+                  {formatCurrency(goal.current_amount, user?.currency)} of {formatCurrency(goal.target_amount, user?.currency)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Analytics Charts */}
         <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 }}>
@@ -363,6 +518,105 @@ export default function HomeScreen() {
         </View>
         <View style={{ height: 20 }} />
       </KeyboardAwareScrollView>
+
+      {/* Profile & Settings Modal */}
+      <Modal
+        visible={profileModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: Math.max(insets.bottom + 20, 36) }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', alignSelf: 'center', marginBottom: 20 }} />
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>Profile & Settings</Text>
+              <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="close" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Profile Avatar & Change Photo */}
+            <View style={{ alignItems: 'center', marginVertical: 10 }}>
+              <TouchableOpacity
+                onPress={handlePickAvatar}
+                activeOpacity={0.8}
+                style={{ width: 90, height: 90, borderRadius: 26, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#2563EB', overflow: 'hidden' }}
+              >
+                {(user?.avatar || user?.profile_picture) ? (
+                  <Image source={{ uri: user.avatar || user.profile_picture }} style={{ width: '100%', height: '100%' }} />
+                ) : (
+                  <Ionicons name="person" size={54} color="#2563EB" />
+                )}
+                {uploadingAvatar && (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  </View>
+                )}
+                <View style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: '#2563EB', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="camera" size={13} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handlePickAvatar} style={{ marginTop: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>Change Photo</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', marginTop: 4 }}>
+                {user?.full_name || user?.username}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{user?.email}</Text>
+            </View>
+
+            {/* Account Quick Info */}
+            <View style={{ flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 14, marginVertical: 14, justifyContent: 'space-around' }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '500' }}>Currency</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827', marginTop: 2 }}>{user?.currency || 'USD'}</Text>
+              </View>
+              <View style={{ width: 1, backgroundColor: '#E2E8F0' }} />
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '500' }}>Monthly Budget</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827', marginTop: 2 }}>{formatCurrency(user?.monthly_budget || 0, user?.currency)}</Text>
+              </View>
+            </View>
+
+            {/* Menu Options */}
+            <View style={{ gap: 8, marginTop: 4 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setProfileModalVisible(false);
+                  router.push('/profile');
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F3F4F6', padding: 14, borderRadius: 14 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="person-circle-outline" size={22} color="#2563EB" />
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>Full Profile & Budget Settings</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  setProfileModalVisible(false);
+                  await logout();
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FEF2F2', padding: 14, borderRadius: 14 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#EF4444' }}>Sign Out</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

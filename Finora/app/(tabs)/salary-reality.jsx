@@ -48,6 +48,37 @@ const CAT_COLORS = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#EF4
 const FREQUENCIES = ['Daily', 'Weekly', 'Bi-Weekly', 'Monthly', 'Yearly'];
 const INDUSTRIES = ['it', 'finance', 'engineering', 'healthcare', 'education', 'government', 'other'];
 
+const FALLBACK_STATES = {
+  Pakistan: ['Punjab', 'Sindh', 'Khyber Pakhtunkhwa', 'Balochistan', 'Islamabad Capital Territory', 'Azad Kashmir', 'Gilgit-Baltistan'],
+  'United States': ['California', 'Texas', 'New York', 'Florida', 'Illinois', 'Washington', 'Massachusetts'],
+  'United Kingdom': ['England', 'Scotland', 'Wales', 'Northern Ireland'],
+  'United Arab Emirates': ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah'],
+  India: ['Maharashtra', 'Delhi', 'Karnataka', 'Tamil Nadu', 'Telangana', 'Uttar Pradesh'],
+};
+
+const FALLBACK_CITIES = {
+  Pakistan: [
+    'Karachi', 'Lahore', 'Faisalabad', 'Rawalpindi', 'Gujranwala', 'Peshawar', 'Multan',
+    'Islamabad', 'Quetta', 'Bahawalpur', 'Sargodha', 'Sialkot', 'Sukkur', 'Larkana',
+    'Sheikhupura', 'Rahim Yar Khan', 'Jhang', 'Dera Ghazi Khan', 'Gujrat', 'Sahiwal',
+    'Wah Cantonment', 'Mardan', 'Kasur', 'Okara', 'Mingora', 'Nawabshah', 'Chiniot',
+    'Kotri', 'Hafizabad', 'Sadiqabad', 'Mirpur Khas', 'Burewala', 'Kohat', 'Khanewal',
+    'Dera Ismail Khan', 'Turbat', 'Muzaffargarh', 'Abbottabad', 'Mandi Bahauddin', 'Gwadar'
+  ],
+  Punjab: [
+    'Lahore', 'Faisalabad', 'Rawalpindi', 'Gujranwala', 'Multan', 'Bahawalpur', 'Sargodha',
+    'Sialkot', 'Sheikhupura', 'Rahim Yar Khan', 'Jhang', 'Dera Ghazi Khan', 'Gujrat', 'Sahiwal',
+    'Kasur', 'Okara', 'Chiniot', 'Hafizabad', 'Sadiqabad', 'Burewala', 'Khanewal',
+    'Muzaffargarh', 'Mandi Bahauddin', 'Jhelum', 'Murree', 'Attock', 'Vehari'
+  ],
+  Sindh: ['Karachi', 'Hyderabad', 'Sukkur', 'Larkana', 'Nawabshah', 'Mirpur Khas', 'Kotri', 'Jacobabad', 'Shikarpur'],
+  'Khyber Pakhtunkhwa': ['Peshawar', 'Mardan', 'Mingora', 'Kohat', 'Abbottabad', 'Dera Ismail Khan', 'Mansehra', 'Swabi'],
+  Balochistan: ['Quetta', 'Turbat', 'Khuzdar', 'Hub', 'Chaman', 'Gwadar', 'Sibi'],
+  'Islamabad Capital Territory': ['Islamabad', 'Rawalpindi'],
+  'Azad Kashmir': ['Muzaffarabad', 'Mirpur', 'Rawalakot', 'Kotli', 'Bhimber'],
+  'Gilgit-Baltistan': ['Gilgit', 'Skardu', 'Hunza', 'Chilas'],
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────
 const fmtAmt = (n, cur = 'PKR') =>
   `${cur} ${parseFloat(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
@@ -298,15 +329,17 @@ export default function SalaryRealityScreen() {
   const [exp, setExp] = useState(0);
   const [dependents, setDependents] = useState(0);
 
-  // Dynamic Lists
-  const [countries, setCountries] = useState([]);
-  const [states, setStates] = useState([]);
-  const [cities, setCities] = useState([]);
+  // Dynamic Lists with instant fallbacks
+  const [countries, setCountries] = useState([
+    'Pakistan', 'United States', 'United Kingdom', 'United Arab Emirates', 'India', 'Canada', 'Saudi Arabia', 'Australia', 'Germany'
+  ]);
+  const [states, setStates] = useState(FALLBACK_STATES['Pakistan'] || []);
+  const [cities, setCities] = useState(FALLBACK_CITIES['Pakistan'] || []);
   const [currencies, setCurrencies] = useState(['PKR', 'USD', 'EUR', 'GBP', 'AED', 'SAR', 'CAD', 'AUD']);
 
   useEffect(() => {
     fetch('https://countriesnow.space/api/v0.1/countries/iso').then(r => r.json()).then(res => {
-      if (!res.error) setCountries(res.data.map(c => c.name).sort());
+      if (!res.error && res.data) setCountries(res.data.map(c => c.name).sort());
     }).catch(() => {});
 
     fetch('https://api.exchangerate-api.com/v4/latest/USD').then(r => r.json()).then(res => {
@@ -314,20 +347,50 @@ export default function SalaryRealityScreen() {
     }).catch(() => {});
   }, []);
 
+  // When country changes: update states and country-level cities
   useEffect(() => {
     if (!country) return;
+
+    // Apply immediate local fallbacks if available
+    if (FALLBACK_STATES[country]) {
+      setStates(FALLBACK_STATES[country]);
+    }
+    if (FALLBACK_CITIES[country]) {
+      setCities(FALLBACK_CITIES[country]);
+    }
+
+    // Fetch live states
     fetch('https://countriesnow.space/api/v0.1/countries/states', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ country })
     }).then(r => r.json()).then(res => {
-      if (!res.error) setStates(res.data.states.map(s => s.name).sort());
-      else setStates([]);
-    }).catch(() => setStates([]));
+      if (!res.error && res.data?.states?.length > 0) {
+        setStates(res.data.states.map(s => s.name).sort());
+      }
+    }).catch(() => {});
+
+    // Fetch live country-wide cities so user can pick a city even without state
+    fetch('https://countriesnow.space/api/v0.1/countries/cities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ country })
+    }).then(r => r.json()).then(res => {
+      if (!res.error && res.data && res.data.length > 0) {
+        setCities(res.data.sort());
+      }
+    }).catch(() => {});
   }, [country]);
 
+  // When province/state changes: narrow down cities for that province
   useEffect(() => {
     if (!country || !state) return;
+
+    // Fast fallback
+    if (FALLBACK_CITIES[state]) {
+      setCities(FALLBACK_CITIES[state]);
+    }
+
     fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -335,14 +398,13 @@ export default function SalaryRealityScreen() {
     }).then(r => r.json()).then(res => {
       if (!res.error && res.data && res.data.length > 0) {
         setCities(res.data.sort());
-      } else {
-        // State IS the city (e.g. Paris, Singapore, Monaco)
-        setCities([state]);
-        setCity(state);
+      } else if (FALLBACK_CITIES[state]) {
+        setCities(FALLBACK_CITIES[state]);
       }
     }).catch(() => {
-      setCities([state]);
-      setCity(state);
+      if (FALLBACK_CITIES[state]) {
+        setCities(FALLBACK_CITIES[state]);
+      }
     });
   }, [country, state]);
 
