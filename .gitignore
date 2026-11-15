@@ -32,7 +32,9 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Local debug / test output (never commit)
+# Media & Uploads
+finora-backend/media/
+media/
 finora-backend/db_users.txt
 finora-backend/debug_user.txt
 finora-backend/output.txt
