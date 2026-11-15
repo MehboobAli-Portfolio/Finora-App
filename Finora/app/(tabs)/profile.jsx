@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { authAPI } from '../../services/api';
 import { CURRENCY_LIST, getCurrencySymbol } from '../../utils/currency';
@@ -210,6 +211,12 @@ export default function ProfileScreen() {
           style={[{ paddingHorizontal: 24, paddingBottom: 60, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 }, { paddingTop: insets.top + 20 }]}
         >
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ position: 'absolute', left: 0, width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF' }}>Profile Settings</Text>
             <TouchableOpacity
               onPress={() => setEditMode(!editMode)}

@@ -585,7 +585,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 onPress={() => {
                   setProfileModalVisible(false);
-                  router.push('/profile');
+                  router.push('/(tabs)/profile');
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F3F4F6', padding: 14, borderRadius: 14 }}
               >

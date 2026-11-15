@@ -31,7 +31,6 @@ function RootLayoutNav() {
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
 
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="profile" options={{ headerShown: false }} />
       <Stack.Screen name="add-expense" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="add-goal" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="add-investment" options={{ presentation: 'modal', headerShown: false }} />
