@@ -132,9 +132,9 @@ def dashboard_view(request):
         while m_month <= 0:
             m_month += 12
             m_year -= 1
-        m_start = timezone.datetime(m_year, m_month, 1, tzinfo=timezone.utc)
+        m_start = timezone.datetime(m_year, m_month, 1, tzinfo=timezone.UTC)
         m_days = calendar.monthrange(m_year, m_month)[1]
-        m_end = timezone.datetime(m_year, m_month, m_days, 23, 59, 59, tzinfo=timezone.utc)
+        m_end = timezone.datetime(m_year, m_month, m_days, 23, 59, 59, tzinfo=timezone.UTC)
         m_agg = Transaction.objects.filter(user=user, date__gte=m_start, date__lte=m_end).aggregate(
             inc=Sum(Case(When(txn_type='income', then='amount'), default=Value(0), output_field=DecimalField())),
             exp=Sum(Case(When(txn_type='expense', then='amount'), default=Value(0), output_field=DecimalField())),

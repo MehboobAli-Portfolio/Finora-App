@@ -210,6 +210,24 @@ export function AssetDistributionChart({ composition, currency }) {
   );
 }
 
+export function DailyBarChart({ title, data = [], color }) {
+  const values = data.map((item) => numberValue(item.total ?? item.y ?? item.value));
+  const maxValue = Math.max(...values, 0);
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.title}>{title}</Text>
+      <View style={styles.chartArea}>
+        {values.map((value, index) => (
+          <View key={index} style={styles.column}>
+            <View style={[styles.bar, { height: maxValue > 0 ? Math.max(4, (value / maxValue) * 120) : 4, backgroundColor: color }]} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = {
   card: {
     marginHorizontal: 20,
