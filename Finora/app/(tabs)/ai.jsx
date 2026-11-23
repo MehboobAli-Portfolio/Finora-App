@@ -227,7 +227,7 @@ export default function CoachScreen() {
       const res = await aiAPI.getHistory();
       setHistoryList(res.data || []);
     } catch (e) {
-      console.error('Failed to load history', e);
+      setHistoryList([]);
     } finally {
       setLoadingHistory(false);
     }

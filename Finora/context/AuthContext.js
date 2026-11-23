@@ -18,12 +18,24 @@ export function AuthProvider({ children }) {
       const userData = await SecureStore.getItemAsync('user_data');
       const token = await SecureStore.getItemAsync('access_token');
       if (userData && token) {
-        setUser(JSON.parse(userData));
-        // Verify token by refreshing profile in the background
-        refreshUser();
+        try {
+          // Validate and refresh profile before mounting authenticated screens
+          const res = await authAPI.getProfile();
+          await SecureStore.setItemAsync('user_data', JSON.stringify(res.data));
+          setUser(res.data);
+        } catch (err) {
+          // Token expired or invalid — clear stale credentials silently and stay on login
+          await SecureStore.deleteItemAsync('access_token');
+          await SecureStore.deleteItemAsync('refresh_token');
+          await SecureStore.deleteItemAsync('user_data');
+          queryClient.clear();
+          setUser(null);
+        }
+      } else {
+        setUser(null);
       }
     } catch (error) {
-      console.error('Auth state error:', error);
+      setUser(null);
     } finally {
       setLoading(false);
     }
