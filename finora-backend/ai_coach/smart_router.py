@@ -101,7 +101,12 @@ class SmartRouter:
         except Exception as e:
             logger.warning("FinoraAI intent classification error: %s", e)
 
-        # ── Step 4: Fallback ─────────────────────────────────────────────
+        # ── Step 4: Try LLM Advisory if GEMINI_API_KEY is configured ──
+        gemini_reply = self._try_gemini_advisory(message, chat_history)
+        if gemini_reply:
+            return gemini_reply, "chartered_accountant_ai", {}
+
+        # ── Step 5: Fallback ─────────────────────────────────────────────
         logger.info("No match found, returning fallback for: %s", message[:50])
         return FALLBACK_MESSAGE, "fallback", {}
 
@@ -143,3 +148,48 @@ class SmartRouter:
         except Exception as e:
             logger.error("RAG search failed: %s", e)
             return None
+
+    def _try_gemini_advisory(self, query, chat_history=None):
+        """
+        Calls Gemini API when GEMINI_API_KEY is configured in the environment.
+        Acts as an expert Personal Chartered Accountant and Financial Advisor.
+        """
+        import os
+        import requests
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            return None
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+            user_profile = (
+                f"User Profile: Currency={getattr(self.engine.user, 'currency', 'USD')}, "
+                f"Balance={self.engine.balance}, Monthly Income={self.engine.income}, "
+                f"Expenses={self.engine.expenses}, Monthly Budget={self.engine.budget}, "
+                f"Health Score={self.engine.health_score}/100."
+            )
+            system_prompt = (
+                "You are Finora, an elite Personal Financial Advisor and Chartered Accountant (FCA/CPA). "
+                "Provide clear, professional, practical financial guidance. Format your answer with bold headings "
+                "and bullet points. Keep it concise, actionable, and mathematically grounded. "
+                f"{user_profile}"
+            )
+            payload = {
+                "contents": [
+                    {"role": "user", "parts": [{"text": f"{system_prompt}\n\nUser Question: {query}"}]}
+                ],
+                "generationConfig": {
+                    "temperature": 0.4,
+                    "maxOutputTokens": 600,
+                }
+            }
+            res = requests.post(url, json=payload, timeout=3.5)
+            if res.status_code == 200:
+                data = res.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if parts and "text" in parts[0]:
+                        return parts[0]["text"]
+        except Exception as e:
+            logger.warning("Gemini call failed or timed out: %s", e)
+        return None

@@ -237,6 +237,7 @@ class FinoraAI:
             return f"Health Score: {self.health_score}/100. Financial Independence unlocked! Keep optimizing your strategy."
 
     def _extract_ticker(self, message):
+        # Explicit ticker with $ prefix: $AAPL, $TSLA, $BTC
         match = re.search(r'\$([A-Za-z]{1,5})\b', message)
         if match:
             return match.group(1).upper()
@@ -244,17 +245,16 @@ class FinoraAI:
         name_map = {
             "apple": "AAPL", "tesla": "TSLA", "microsoft": "MSFT", "google": "GOOG",
             "amazon": "AMZN", "meta": "META", "nvidia": "NVDA", "netflix": "NFLX",
-            "ethereum": "ETH-USD", "dogecoin": "DOGE-USD", "solana": "SOL-USD",
-            "gold": "GC=F", "silver": "SI=F",
+            "bitcoin": "BTC-USD", "ethereum": "ETH-USD", "dogecoin": "DOGE-USD", "solana": "SOL-USD",
+            "gold": "GC=F", "silver": "SI=F", "s&p 500": "SPY", "sp500": "SPY", "nasdaq": "QQQ",
         }
-        words = message.lower().split()
-        for word in words:
-            if word in name_map:
-                return name_map[word]
+        low = message.lower()
+        # Only check ticker names if asking about price, stock, crypto, or market
+        if any(w in low for w in ["price", "stock", "quote", "share", "crypto", "trading at", "ticker", "market"]):
+            for name, ticker in name_map.items():
+                if name in low:
+                    return ticker
 
-        matches = re.findall(r'\b[A-Z]{2,5}\b', message)
-        if matches:
-            return matches[0]
         return None
 
     def _extract_amount(self, message):
@@ -309,15 +309,15 @@ class FinoraAI:
         if amount is not None:
             entities['amount'] = amount
 
-        ticker = self._extract_ticker(message)
-        if ticker:
+        # Only fetch live ticker if user is explicitly querying for price or market
+        if ticker and any(w in message.lower() for w in ["price", "trading", "stock", "how much is", "$", "quote"]):
             try:
                 ticker_obj = yf.Ticker(ticker)
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(lambda: ticker_obj.fast_info)
                     try:
-                        info = future.result(timeout=2.5)  # shortcut: 2.5 s hard cap; raise on slow provider
+                        info = future.result(timeout=1.5)
                     except concurrent.futures.TimeoutError:
                         logger.warning('yfinance ticker lookup timed out for %s', ticker)
                         raise Exception('timeout')
@@ -401,30 +401,44 @@ class FinoraAI:
     def _fallback_keyword_matcher(self, text):
         if any(w in text for w in ["portfolio", "holdings", "my investments", "my stocks", "positions"]):
             return "check_portfolio"
-        if any(w in text for w in ["goal", "goals", "savings target", "emergency fund"]):
+        if any(w in text for w in ["goal", "goals", "savings target"]):
             return "check_goals"
         if any(w in text for w in ["balance", "net worth", "how much money", "how much cash", "how much do i have"]):
             return "check_balance"
         if any(w in text for w in ["spent", "spending", "expenses", "where did my money", "categories"]):
             return "check_spending"
-        if any(w in text for w in ["invest", "wealth", "etf", "index fund", "stock tip"]):
-            return "investing_advice"
-        if any(w in text for w in ["debt", "loan", "credit card", "pay off", "avalanche", "snowball"]):
-            return "debt_advice"
-        if any(w in text for w in ["401k", "ira", "retire", "retirement", "pension"]):
-            return "retirement_advice"
-        if any(w in text for w in ["tax", "deduction", "write off", "capital gains tax"]):
+        if any(w in text for w in ["50/30/20", "50 30 20", "zero-based", "envelope method", "budget rule"]):
+            return "rule_50_30_20"
+        if any(w in text for w in ["accounting", "chartered accountant", "ca advice", "balance sheet", "p&l", "profit and loss", "double entry", "bookkeeping", "accrual", "depreciation", "ebitda"]):
+            return "ca_accounting"
+        if any(w in text for w in ["tax", "deduction", "write off", "write-off", "capital gains", "irs", "fbr", "1099", "w2", "vat", "gst", "tax slab"]):
             return "tax_advice"
+        if any(w in text for w in ["emergency fund", "rainy day", "safety net", "contingency fund"]):
+            return "emergency_fund"
+        if any(w in text for w in ["compound interest", "compounding", "rule of 72", "fire", "financial independence", "safe withdrawal", "4% rule"]):
+            return "compound_interest_fire"
+        if any(w in text for w in ["debt", "loan", "credit card", "pay off", "avalanche", "snowball", "apr", "refinance"]):
+            return "debt_advice"
+        if any(w in text for w in ["insurance", "term life", "health insurance", "premium", "coverage", "policy"]):
+            return "insurance_advice"
+        if any(w in text for w in ["freelance", "business", "invoice", "cash flow", "llc", "sole proprietor"]):
+            return "business_finance"
+        if any(w in text for w in ["401k", "ira", "retire", "retirement", "pension", "roth"]):
+            return "retirement_advice"
         if any(w in text for w in ["house", "mortgage", "rent or buy", "property", "real estate"]):
             return "real_estate"
         if any(w in text for w in ["crypto", "bitcoin", "ethereum", "blockchain", "doge"]):
             return "crypto_advice"
         if any(w in text for w in ["market", "spy", "stock market", "nasdaq", "btc price"]):
             return "market_status"
+        if any(w in text for w in ["invest", "wealth", "etf", "index fund", "stock tip"]):
+            return "investing_advice"
         if any(w in text for w in ["limit", "budget", "overspend", "afford"]):
             return "check_budget"
         if any(w in text for w in ["save", "reduce", "frugal", "cut back", "spend less"]):
             return "improve_savings"
+        if any(w in text for w in ["financial advice", "financial advisor", "money management", "personal finance"]):
+            return "general_advisory"
         if re.search(r"\b(hello|hi|hey|thanks|good morning|good evening|help me)\b", text):
             return "greeting"
         return "unknown"
@@ -564,10 +578,128 @@ class FinoraAI:
                 )
             return detailed_advise
 
-        elif intent == "debt_advice":
+        elif intent == "ca_accounting":
             return (
-                "High-interest debt destroys wealth. Focus on the 'Avalanche Method' (paying off the highest interest "
-                "rate first) to mathematically save the most money."
+                "🏛️ **Chartered Accountant Advisory — Core Financial Principles**:\n\n"
+                "1️⃣ **The Golden Equation**: Assets = Liabilities + Equity. Every transaction affects both sides in double-entry bookkeeping.\n"
+                "2️⃣ **Cash vs Accrual Accounting**: Cash accounting records money when received/paid. Accrual records revenue when earned and expenses when incurred — giving true visibility into profitability.\n"
+                "3️⃣ **The 3 Core Statements**:\n"
+                "   • **P&L (Income Statement)**: Revenue minus Cost of Goods and Overheads = Net Operating Profit.\n"
+                "   • **Balance Sheet**: Snapshot of what you own (Cash, Equipment, Inventory) vs what you owe (Debt, Accounts Payable).\n"
+                "   • **Cash Flow Statement**: Tracks actual liquidity across Operating, Investing, and Financing activities.\n"
+                "4️⃣ **Working Capital & Runway**: Always maintain at least 3 to 6 months of operating cash to withstand business or life downturns.\n\n"
+                "Need specific ledger structuring, depreciation schedules, or profit margin analysis? Let me know!"
+            )
+
+        elif intent == "rule_50_30_20":
+            inc = self.income if self.income > 0 else 100000
+            needs = inc * 0.50
+            wants = inc * 0.30
+            savings = inc * 0.20
+            return (
+                f"📊 **The 50/30/20 Budgeting Framework (Tailored to You)**:\n\n"
+                f"Based on your tracked monthly income of **{self.fmt(inc)}**:\n\n"
+                f"• **50% Needs ({self.fmt(needs)})**: Essential obligations (rent/mortgage, groceries, basic utilities, transport, minimum debt payments).\n"
+                f"• **30% Wants ({self.fmt(wants)})**: Lifestyle choices (dining out, subscriptions, leisure, vacations, shopping).\n"
+                f"• **20% Savings & Debt ({self.fmt(savings)})**: Emergency fund buildup, retirement investing, index funds, accelerated debt payoff.\n\n"
+                f"💡 **Finora Audit**: Your actual expenses this month are **{self.fmt(self.expenses)}** "
+                f"({(self.expenses/inc*100):.1f}% of income). "
+                f"{'You are maintaining a healthy surplus!' if self.expenses < inc else '⚠️ Your expenses exceed income — consider reducing discretionary Wants by 15%.'}"
+            )
+
+        elif intent == "emergency_fund":
+            three_months = self.expenses * 3 if self.expenses > 0 else 150000
+            six_months = self.expenses * 6 if self.expenses > 0 else 300000
+            return (
+                f"🛡️ **Emergency Fund Strategy (Chartered Accountant Guide)**:\n\n"
+                f"An emergency fund is your financial shield against layoffs, medical emergencies, or unforeseen repairs.\n\n"
+                f"• **Recommended Baseline**: 3 to 6 months of essential living expenses.\n"
+                f"• **Your Target**: Based on your current expenses ({self.fmt(self.expenses)}/mo):\n"
+                f"   - Minimum (3 Months): **{self.fmt(three_months)}**\n"
+                f"   - Optimal (6 Months): **{self.fmt(six_months)}**\n"
+                f"• **Where to Keep It**: In a High-Yield Savings Account (HYSA) or liquid money market fund — NEVER in volatile stocks or locked illiquid deposits.\n"
+                f"• **Action Plan**: Set up an automatic transfer on payday until you hit your 3-month milestone!"
+            )
+
+        elif intent == "compound_interest_fire":
+            surplus = max(self.income - self.expenses, 10000)
+            ten_yr_future = surplus * (((1 + 0.08/12)**(12*10) - 1) / (0.08/12))
+            annual_exp = self.expenses * 12 if self.expenses > 0 else 600000
+            fire_target = annual_exp * 25
+            return (
+                f"🔥 **Compound Interest & Financial Independence (FIRE)**:\n\n"
+                f"1️⃣ **The Rule of 72**: Divide 72 by your annual return to find doubling time. At 8% average return, your money doubles every **9 years**.\n"
+                f"2️⃣ **Your Wealth Compounding**: Investing your surplus of **{self.fmt(surplus)}/month** at 8% annual return yields:\n"
+                f"   • In 5 Years: **{self.fmt(surplus * (((1 + 0.08/12)**(12*5) - 1) / (0.08/12)))}**\n"
+                f"   • In 10 Years: **{self.fmt(ten_yr_future)}** (over double your contributions through compounding!)\n"
+                f"3️⃣ **The 4% Safe Withdrawal Rule (FIRE)**:\n"
+                f"   • Annual Lifestyle Cost: {self.fmt(annual_exp)}\n"
+                f"   • Your FIRE Number (25x expenses): **{self.fmt(fire_target)}**\n"
+                f"Once your invested portfolio hits {self.fmt(fire_target)}, you can safely withdraw 4% annually indefinitely without depleting capital!"
+            )
+
+        elif intent == "business_finance":
+            return (
+                "💼 **Business & Freelancer Financial Management**:\n\n"
+                "1️⃣ **Separate Personal & Business**: Never mingle funds. Open a dedicated business account for all client receipts and business expenses.\n"
+                "2️⃣ **The 30% Tax Reserve Rule**: Automatically transfer 25% to 30% of every client invoice into a separate tax holding account.\n"
+                "3️⃣ **Cash Flow Runway**: Maintain 3 months of operating expenses in cash before taking distributions or owner drawings.\n"
+                "4️⃣ **Invoice Terms**: Use Net-15 terms with automatic payment reminders, and offer 2% discount for payments within 7 days to accelerate cash flow.\n"
+                "5️⃣ **Valid Deductions**: Keep receipts for software subscriptions, home office square footage, internet, phone bills, and equipment depreciation."
+            )
+
+        elif intent == "insurance_advice":
+            annual_in = self.income * 12 if self.income > 0 else 1200000
+            term_rec = annual_in * 10
+            return (
+                f"🛡️ **Insurance Architecture — Wealth Protection**:\n\n"
+                f"1️⃣ **Term Life Insurance**: If anyone depends on your income, carry pure Term Life covering **10x to 12x annual income** (~{self.fmt(term_rec)}). Avoid costly whole life / endowment policies which have high fees and poor yields.\n"
+                f"2️⃣ **Comprehensive Health Insurance**: Medical emergencies are the #1 cause of sudden bankruptcy. Ensure you have inpatient hospitalization coverage with an affordable deductible.\n"
+                f"3️⃣ **Disability Protection**: Your greatest asset is your ability to earn. Long-term disability coverage replaces up to 60-70% of income if injured.\n"
+                f"4️⃣ **Auto & Property**: Always maintain maximum liability limits to protect your personal net worth from civil claims."
+            )
+
+        elif intent == "general_advisory":
+            return (
+                f"🎩 **Finora Personal Chartered Accountant & Financial Advisor**:\n\n"
+                f"Here is your real-time financial health audit:\n"
+                f"• **Net Balance**: {self.fmt(self.balance)}\n"
+                f"• **Monthly Income**: {self.fmt(self.income)} | **Expenses**: {self.fmt(self.expenses)}\n"
+                f"• **Health Score**: **{self.health_score}/100**\n"
+                f"• **Active Goals**: {len(self.active_goals)} active | {self.completed_goals} completed\n\n"
+                f"**Advisor Recommendations**:\n"
+                f"1. {'Maintain your budget constraints!' if self.expenses <= self.budget else '⚠️ Curb non-essential spending to bring expenses within budget.'}\n"
+                f"2. Ensure you have at least 3 months of living expenses saved in an emergency reserve.\n"
+                f"3. Direct surplus capital into diversified index funds and active goal targets.\n\n"
+                f"Ask me about: **Taxes & Write-offs**, **50/30/20 Rule**, **FIRE Calculation**, **Debt Avalanche**, or **Accounting Principles**!"
+            )
+
+        elif intent == "debt_advice":
+            surplus = self.income - self.expenses
+            return (
+                "💳 **Debt Elimination Blueprint (Chartered Accountant Analysis)**:\n\n"
+                "1️⃣ **Debt Avalanche (Mathematically Optimal)**:\n"
+                "   • Pay minimums on all obligations, then channel 100% of excess cash to the loan with the **highest Interest Rate (APR)**.\n"
+                "   • Saves the absolute most money in total interest charges.\n\n"
+                "2️⃣ **Debt Snowball (Behavioral Momentum)**:\n"
+                "   • Pay off the **smallest balance first** regardless of rate.\n"
+                "   • Gives psychological quick wins and reduces the count of open obligations.\n\n"
+                f"3️⃣ **Your Capacity**: You currently have a monthly surplus of **{self.fmt(max(0, surplus))}**. "
+                f"Allocating this surplus directly to principal reduction will cut payoff time by up to 50%!\n\n"
+                "⚠️ **Rule of Thumb**: Never invest aggressively if you carry credit card debt with APR above 15% — paying off high APR debt is guaranteed return!"
+            )
+
+        elif intent == "tax_advice":
+            return (
+                "🏛️ **Tax Planning & Optimization (Chartered Accountant Advice)**:\n\n"
+                "1️⃣ **Maximize Pre-Tax Contributions**: Contributing to retirement accounts (401k, Traditional IRA, or local provident funds) directly reduces taxable gross income.\n"
+                "2️⃣ **Tax-Loss Harvesting**: Sell losing positions in taxable brokerage accounts before year-end to offset realized capital gains.\n"
+                "3️⃣ **Long-Term vs Short-Term Capital Gains**: Hold investments for at least 12+ months to qualify for preferential long-term capital gains tax rates.\n"
+                "4️⃣ **Deductible Business & Work Expenses**:\n"
+                "   • Home office deduction (dedicated square footage)\n"
+                "   • Equipment, software subscriptions, cell phone & internet % used for work\n"
+                "   • Professional courses, books, and certifications\n"
+                "5️⃣ **Documentation**: Keep electronic receipts for all deductible expenses for a minimum of 5 to 7 years in case of audit."
             )
 
         elif intent == "market_status":
@@ -591,19 +723,6 @@ class FinoraAI:
             else:
                 adv += "Your current monthly expenses are consuming your income, so purchasing these assets right now isn't recommended. Focus on building your savings first!"
             return adv
-
-        elif intent == "improve_savings":
-            return (
-                "To save more immediately: 1. Cancel unused subscriptions. 2. Pre-allocate 20% of your income to "
-                "savings the second you get paid. 3. Cook meals at home to drastically lower food expenses."
-            )
-
-        elif intent == "tax_advice":
-            return (
-                "Tax efficiency is key to wealth. Maximize pre-tax contributions to 401ks or Traditional IRAs to lower "
-                "your taxable income. For taxable accounts, hold investments for over a year to benefit from lower "
-                "Long-Term Capital Gains rates. Consider tax-loss harvesting to offset gains!"
-            )
 
         elif intent == "crypto_advice":
             return (

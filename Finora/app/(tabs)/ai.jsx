@@ -23,13 +23,14 @@ import { useAuth } from '../../context/AuthContext';
 
 /* ─── constants ─────────────────────────────────────────────── */
 const CHIPS = [
-  { id: '1', label: '💰 My Balance',    q: 'What is my current net balance?' },
-  { id: '2', label: '📊 Spending',      q: 'Show my spending breakdown this month' },
-  { id: '3', label: '🎯 Goals',         q: 'How are my savings goals progressing?' },
-  { id: '4', label: '📈 Market',        q: 'How is the market doing today?' },
-  { id: '5', label: '💡 50/30/20 Rule', q: 'What is the 50/30/20 budgeting rule?' },
-  { id: '6', label: '💳 Debt Strategy', q: 'What is the avalanche vs snowball debt method?' },
-  { id: '7', label: '🏖️ Retirement',   q: 'How much should I save for retirement?' },
+  { id: '1', label: '🏛️ CA & Tax Advice', q: 'Give me personal Chartered Accountant advice on taxes, write-offs, and accounting.' },
+  { id: '2', label: '📊 50/30/20 Rule',   q: 'How does the 50/30/20 budgeting rule apply to my finances?' },
+  { id: '3', label: '🔥 FIRE & Wealth',   q: 'How much do I need to reach financial independence (FIRE)?' },
+  { id: '4', label: '🛡️ Emergency Fund', q: 'How large should my emergency fund be?' },
+  { id: '5', label: '💳 Debt Avalanche',  q: 'What is the mathematically best way to eliminate debt?' },
+  { id: '6', label: '📈 Investing Plan',  q: 'What is the recommended asset allocation for investing?' },
+  { id: '7', label: '💰 My Balance',     q: 'What is my current net balance?' },
+  { id: '8', label: '📉 My Spending',    q: 'Show my spending breakdown this month' },
 ];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const TYPING_ID = '__typing__'; // stable id for the live bubble
@@ -170,7 +171,7 @@ export default function CoachScreen() {
       const words = reply.split(' ');
       let built = '';
       let pending = '';
-      const CHUNK_MS = 80;
+      const CHUNK_MS = 25;
       let lastFlush = Date.now();
 
       for (let i = 0; i < words.length; i++) {
@@ -264,10 +265,10 @@ export default function CoachScreen() {
               <Ionicons name="sparkles" size={20} color="#2563EB" />
             </View>
             <View>
-              <Text style={st.hTitle}>AI Coach</Text>
+              <Text style={st.hTitle}>Financial Advisor & CA</Text>
               <View style={st.hStatus}>
                 <View style={[st.hDot, busy && { backgroundColor: '#FBBF24' }]} />
-                <Text style={st.hSub}>{busy ? 'Thinking…' : 'Online'}</Text>
+                <Text style={st.hSub}>{busy ? 'Analyzing finances…' : 'Online · Chartered Accountant'}</Text>
               </View>
             </View>
           </View>

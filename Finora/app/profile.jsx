@@ -3,16 +3,16 @@ import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity,
   Alert, TextInput, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Image, Modal, FlatList
+  Platform, Image, Modal, FlatList, Switch
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useAuth } from '../../context/AuthContext';
-import { authAPI } from '../../services/api';
-import { CURRENCY_LIST, getCurrencySymbol } from '../../utils/currency';
+import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../services/api';
+import { CURRENCY_LIST, getCurrencySymbol, formatCurrency } from '../utils/currency';
 
 export default function ProfileScreen() {
   const {
@@ -25,6 +25,8 @@ export default function ProfileScreen() {
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [budget, setBudget] = useState(String(user?.monthly_budget || ''));
   const [currency, setCurrency] = useState(user?.currency || 'USD');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -170,7 +172,7 @@ export default function ProfileScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'This will permanently delete your account, ledger, and goals. This action cannot be undone.',
+      'This will permanently delete your account, transactions, and goals. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -200,7 +202,7 @@ export default function ProfileScreen() {
         enableOnAndroid={true}
         extraScrollHeight={20}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 100, 120) }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}
         bounces={false}
       >
         {/* Profile Header Gradient */}
@@ -208,35 +210,35 @@ export default function ProfileScreen() {
           colors={['#1E3A8A', '#2563EB', '#3B82F6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[{ paddingHorizontal: 24, paddingBottom: 60, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 }, { paddingTop: insets.top + 20 }]}
+          style={[{ paddingHorizontal: 24, paddingBottom: 50, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 }, { paddingTop: insets.top + 16 }]}
         >
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <TouchableOpacity
               onPress={() => router.back()}
-              style={{ position: 'absolute', left: 0, width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
+              style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
             >
               <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF' }}>Profile Settings</Text>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF' }}>Settings & Profile</Text>
             <TouchableOpacity
               onPress={() => setEditMode(!editMode)}
-              style={{ position: 'absolute', right: 0, width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
+              style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}
             >
               <Ionicons name={editMode ? 'close' : 'create-outline'} size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
           {/* Avatar with Camera Trigger */}
-          <View style={{ alignItems: 'center', marginTop: 30 }}>
+          <View style={{ alignItems: 'center', marginTop: 24 }}>
             <TouchableOpacity
               onPress={handlePickAvatar}
               activeOpacity={0.85}
-              style={{ width: 100, height: 100, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 4, borderColor: 'rgba(255,255,255,0.5)', overflow: 'hidden' }}
+              style={{ width: 96, height: 96, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 4, borderColor: 'rgba(255,255,255,0.5)', overflow: 'hidden' }}
             >
-              {user?.avatar ? (
-                <Image source={{ uri: user.avatar }} style={{ width: 100, height: 100 }} />
+              {(user?.avatar || user?.profile_picture) ? (
+                <Image source={{ uri: user.avatar || user.profile_picture }} style={{ width: '100%', height: '100%' }} />
               ) : (
-                <Text style={{ fontSize: 40, fontWeight: '800', color: '#FFFFFF' }}>
+                <Text style={{ fontSize: 38, fontWeight: '800', color: '#FFFFFF' }}>
                   {(user?.full_name || user?.username || 'U').charAt(0).toUpperCase()}
                 </Text>
               )}
@@ -245,32 +247,32 @@ export default function ProfileScreen() {
                   <ActivityIndicator color="#FFFFFF" />
                 </View>
               )}
-              <View style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: '#2563EB', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF' }}>
-                <Ionicons name="camera" size={14} color="#FFFFFF" />
+              <View style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: '#2563EB', width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF' }}>
+                <Ionicons name="camera" size={13} color="#FFFFFF" />
               </View>
             </TouchableOpacity>
-            <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginBottom: 4, letterSpacing: -0.5 }}>
+            <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 2, letterSpacing: -0.5 }}>
               {user?.full_name || user?.username}
             </Text>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' }}>
-              Joined {user?.created_at?.slice(0, 10)}
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500' }}>
+              {user?.email}
             </Text>
           </View>
         </LinearGradient>
 
         {/* Account Details Card */}
-        <View style={{ backgroundColor: '#FFFFFF', marginHorizontal: 20, marginTop: -30, borderRadius: 24, padding: 24, shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 8, borderWidth: 1, borderColor: '#F1F5F9' }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 }}>
+        <View style={{ backgroundColor: '#FFFFFF', marginHorizontal: 20, marginTop: -24, borderRadius: 24, padding: 22, shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 6, borderWidth: 1, borderColor: '#F1F5F9' }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14 }}>
             Account Information
           </Text>
 
           {/* Full Name */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Full Name</Text>
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Full Name</Text>
             <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1.5, borderColor: '#E2E8F0', paddingHorizontal: 16, height: 50 }, !editMode && { backgroundColor: '#F1F5F9', borderColor: '#F1F5F9' }]}>
               <Ionicons name="person-outline" size={20} color={editMode ? "#9CA3AF" : "#D1D5DB"} style={{ marginRight: 12 }} />
               <TextInput
-                style={[{ flex: 1, fontSize: 16, color: '#0F172A', fontWeight: '500' }, !editMode && { color: '#6B7280' }]}
+                style={[{ flex: 1, fontSize: 15, color: '#0F172A', fontWeight: '500' }, !editMode && { color: '#6B7280' }]}
                 value={fullName}
                 onChangeText={setFullName}
                 editable={editMode}
@@ -279,12 +281,12 @@ export default function ProfileScreen() {
           </View>
 
           {/* Username (read-only) */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Username</Text>
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Username</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 14, borderWidth: 1.5, borderColor: '#F1F5F9', paddingHorizontal: 16, height: 50 }}>
               <Ionicons name="at-outline" size={20} color="#D1D5DB" style={{ marginRight: 12 }} />
               <TextInput
-                style={{ flex: 1, fontSize: 16, color: '#6B7280', fontWeight: '500' }}
+                style={{ flex: 1, fontSize: 15, color: '#6B7280', fontWeight: '500' }}
                 value={user?.username}
                 editable={false}
               />
@@ -292,12 +294,12 @@ export default function ProfileScreen() {
           </View>
 
           {/* Email (read-only) */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Email Address</Text>
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Email Address</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 14, borderWidth: 1.5, borderColor: '#F1F5F9', paddingHorizontal: 16, height: 50 }}>
               <Ionicons name="mail-outline" size={20} color="#D1D5DB" style={{ marginRight: 12 }} />
               <TextInput
-                style={{ flex: 1, fontSize: 16, color: '#6B7280', fontWeight: '500' }}
+                style={{ flex: 1, fontSize: 15, color: '#6B7280', fontWeight: '500' }}
                 value={user?.email}
                 editable={false}
               />
@@ -305,18 +307,18 @@ export default function ProfileScreen() {
           </View>
 
           {/* Financial Settings */}
-          <Text style={[{ fontSize: 14, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 }, { marginTop: 10 }]}>
-            Financial Settings
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14, marginTop: 8 }}>
+            Financial & Budget Preferences
           </Text>
 
-          <View style={{ flexDirection: 'row' }}>
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
             {/* Monthly Budget */}
-            <View style={[{ marginBottom: 18 }, { flex: 1, marginRight: 12 }]}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Monthly Budget</Text>
-              <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1.5, borderColor: '#E2E8F0', paddingHorizontal: 16, height: 50 }, !editMode && { backgroundColor: '#F1F5F9', borderColor: '#F1F5F9' }]}>
-                <Ionicons name="wallet-outline" size={20} color={editMode ? "#9CA3AF" : "#D1D5DB"} style={{ marginRight: 8 }} />
+            <View style={{ flex: 1.2 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Monthly Budget</Text>
+              <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1.5, borderColor: '#E2E8F0', paddingHorizontal: 14, height: 50 }, !editMode && { backgroundColor: '#F1F5F9', borderColor: '#F1F5F9' }]}>
+                <Ionicons name="wallet-outline" size={18} color={editMode ? "#9CA3AF" : "#D1D5DB"} style={{ marginRight: 8 }} />
                 <TextInput
-                  style={[{ flex: 1, fontSize: 16, color: '#0F172A', fontWeight: '500' }, !editMode && { color: '#6B7280' }]}
+                  style={[{ flex: 1, fontSize: 15, color: '#0F172A', fontWeight: '600' }, !editMode && { color: '#6B7280' }]}
                   value={budget}
                   onChangeText={setBudget}
                   keyboardType="decimal-pad"
@@ -327,18 +329,18 @@ export default function ProfileScreen() {
             </View>
 
             {/* Currency Picker Button */}
-            <View style={[{ marginBottom: 18 }, { flex: 0.8 }]}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Currency</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Currency</Text>
               <TouchableOpacity
                 onPress={() => editMode && setCurrencyModalVisible(true)}
                 activeOpacity={editMode ? 0.7 : 1}
                 style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1.5, borderColor: '#E2E8F0', paddingHorizontal: 12, height: 50, justifyContent: 'space-between' }, !editMode && { backgroundColor: '#F1F5F9', borderColor: '#F1F5F9' }]}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563EB' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#2563EB' }}>
                     {getCurrencySymbol(currency).trim()}
                   </Text>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: editMode ? '#0F172A' : '#6B7280' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: editMode ? '#0F172A' : '#6B7280' }}>
                     {currency}
                   </Text>
                 </View>
@@ -347,10 +349,49 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {/* App Preferences */}
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12, marginTop: 8 }}>
+            App Preferences
+          </Text>
+
+          <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, gap: 14, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="notifications-outline" size={20} color="#2563EB" />
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Smart Spending Alerts</Text>
+                  <Text style={{ fontSize: 11, color: '#6B7280' }}>Notify when budget exceeds 85%</Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={setNotificationsEnabled}
+                trackColor={{ false: '#E2E8F0', true: '#BFDBFE' }}
+                thumbColor={notificationsEnabled ? '#2563EB' : '#94A3B8'}
+              />
+            </View>
+            <View style={{ height: 1, backgroundColor: '#E2E8F0' }} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="finger-print-outline" size={20} color="#2563EB" />
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Biometric Login</Text>
+                  <Text style={{ fontSize: 11, color: '#6B7280' }}>Fingerprint or Face unlock</Text>
+                </View>
+              </View>
+              <Switch
+                value={biometricsEnabled}
+                onValueChange={setBiometricsEnabled}
+                trackColor={{ false: '#E2E8F0', true: '#BFDBFE' }}
+                thumbColor={biometricsEnabled ? '#2563EB' : '#94A3B8'}
+              />
+            </View>
+          </View>
+
           {/* Save Button in Edit Mode */}
           {editMode && (
             <TouchableOpacity
-              style={{ backgroundColor: '#2563EB', borderRadius: 14, height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6, marginTop: 10, marginBottom: 16 }}
+              style={{ backgroundColor: '#2563EB', borderRadius: 14, height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 4, marginBottom: 14 }}
               onPress={handleSave}
               disabled={saving}
               activeOpacity={0.8}
@@ -360,7 +401,7 @@ export default function ProfileScreen() {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF' }}>Save Profile Changes</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>Save Settings</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -368,31 +409,31 @@ export default function ProfileScreen() {
 
           {/* Change Password Button */}
           <TouchableOpacity
-            style={{ backgroundColor: '#F8FAFC', borderRadius: 14, height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: '#E2E8F0', marginTop: 8 }}
+            style={{ backgroundColor: '#F8FAFC', borderRadius: 14, height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: '#E2E8F0', marginTop: 4 }}
             onPress={() => setPasswordModalVisible(true)}
             activeOpacity={0.7}
           >
             <Ionicons name="key-outline" size={18} color="#475569" />
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#475569' }}>Change Password</Text>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Change Password</Text>
           </TouchableOpacity>
 
           {/* Sign Out Button */}
           <TouchableOpacity
-            style={{ backgroundColor: '#FEF2F2', borderRadius: 14, height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1.5, borderColor: '#FECACA', marginTop: 12 }}
+            style={{ backgroundColor: '#FEF2F2', borderRadius: 14, height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1.5, borderColor: '#FECACA', marginTop: 10 }}
             onPress={handleLogout}
             activeOpacity={0.7}
           >
-            <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#EF4444' }}>Sign Out</Text>
+            <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#EF4444' }}>Sign Out</Text>
           </TouchableOpacity>
 
-          {/* Delete Account (Mandatory for App Store & Google Play) */}
+          {/* Delete Account */}
           <TouchableOpacity
-            style={{ alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingVertical: 8 }}
+            style={{ alignItems: 'center', justifyContent: 'center', marginTop: 16, paddingVertical: 6 }}
             onPress={handleDeleteAccount}
             activeOpacity={0.7}
           >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#94A3B8' }}>Delete Account</Text>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#94A3B8' }}>Delete Account</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>

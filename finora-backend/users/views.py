@@ -124,6 +124,31 @@ def dashboard_view(request):
     weekly = weekly_qs.annotate(week=TruncWeek('date')).values('week').annotate(total=Sum('amount')).order_by('week')
     weekly_spending = [{"date": str(w['week']) if w['week'] else '', "total": float(w['total'])} for w in weekly]
 
+    # ── Monthly 6-Month Income vs Expense Trend ──
+    monthly_trend = []
+    for i in range(5, -1, -1):
+        m_year = now.year
+        m_month = now.month - i
+        while m_month <= 0:
+            m_month += 12
+            m_year -= 1
+        m_start = timezone.datetime(m_year, m_month, 1, tzinfo=timezone.utc)
+        m_days = calendar.monthrange(m_year, m_month)[1]
+        m_end = timezone.datetime(m_year, m_month, m_days, 23, 59, 59, tzinfo=timezone.utc)
+        m_agg = Transaction.objects.filter(user=user, date__gte=m_start, date__lte=m_end).aggregate(
+            inc=Sum(Case(When(txn_type='income', then='amount'), default=Value(0), output_field=DecimalField())),
+            exp=Sum(Case(When(txn_type='expense', then='amount'), default=Value(0), output_field=DecimalField())),
+        )
+        month_label = m_start.strftime("%b")
+        m_i = float(m_agg['inc'] or 0)
+        m_e = float(m_agg['exp'] or 0)
+        monthly_trend.append({
+            "month": month_label,
+            "income": m_i,
+            "expenses": m_e,
+            "saved": m_i - m_e,
+        })
+
     # Additional Analytics & Health Metrics
     m_inc = float(monthly_income)
     m_exp = float(monthly_expenses)
@@ -131,10 +156,35 @@ def dashboard_view(request):
     net_worth = round(float(balance) + float(total_investments), 2)
 
     days_in_month = calendar.monthrange(now.year, now.month)[1]
-    days_remaining = max(1, days_in_month - now.day + 1)
+    days_elapsed = now.day
+    days_remaining = max(1, days_in_month - days_elapsed + 1)
     budget_val = float(user.monthly_budget)
     budget_remaining = max(0.0, budget_val - m_exp) if budget_val > 0 else 0.0
     daily_safe_spend = round(budget_remaining / days_remaining, 2) if budget_val > 0 else 0.0
+
+    days_elapsed_pct = round((days_elapsed / days_in_month) * 100, 1)
+    budget_used_pct = round((m_exp / budget_val) * 100, 1) if budget_val > 0 else 0.0
+    pacing_status = "on_track"
+    if budget_val > 0:
+        if budget_used_pct > days_elapsed_pct + 12:
+            pacing_status = "fast"
+        elif budget_used_pct < days_elapsed_pct - 12:
+            pacing_status = "thrifty"
+
+    budget_pacing = {
+        "days_elapsed_pct": days_elapsed_pct,
+        "budget_used_pct": budget_used_pct,
+        "pacing_status": pacing_status,
+        "days_elapsed": days_elapsed,
+        "days_in_month": days_in_month,
+    }
+
+    goals_saved = float(sum(g.current_amount for g in Goal.objects.filter(user=user)))
+    net_worth_composition = {
+        "cash": max(0.0, float(balance)),
+        "investments": float(total_investments),
+        "goals": goals_saved,
+    }
 
     score = 70
     if budget_val > 0:
@@ -184,6 +234,9 @@ def dashboard_view(request):
         'spending_by_category': spending_by_category,
         'income_by_category': income_by_category,
         'weekly_spending': weekly_spending,
+        'monthly_trend': monthly_trend,
+        'budget_pacing': budget_pacing,
+        'net_worth_composition': net_worth_composition,
     })
 
 

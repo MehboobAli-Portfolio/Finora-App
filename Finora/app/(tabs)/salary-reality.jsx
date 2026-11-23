@@ -316,6 +316,7 @@ export default function SalaryRealityScreen() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [activeChart, setActiveChart] = useState('breakdown'); // 'breakdown' or 'gauge'
+  const [resultTab, setResultTab] = useState('overview'); // 'overview' | 'tax' | 'budget' | 'fire' | 'peers'
 
   // Form states
   const [country, setCountry] = useState('Pakistan');
@@ -559,26 +560,165 @@ export default function SalaryRealityScreen() {
               </View>
             </View>
 
-            {/* CHART SWITCHER */}
-            <View style={styles.chartSwitcher}>
-              <TouchableOpacity 
-                onPress={() => setActiveChart('breakdown')} 
-                style={[styles.chartSwitchBtn, activeChart === 'breakdown' && styles.chartSwitchBtnActive]}
-              >
-                <Text style={[styles.chartSwitchText, activeChart === 'breakdown' && styles.chartSwitchTextActive]}>Breakdown</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => setActiveChart('gauge')} 
-                style={[styles.chartSwitchBtn, activeChart === 'gauge' && styles.chartSwitchBtnActive]}
-              >
-                <Text style={[styles.chartSwitchText, activeChart === 'gauge' && styles.chartSwitchTextActive]}>Savings</Text>
-              </TouchableOpacity>
-            </View>
+            {/* RESULT TABS */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 18 }} contentContainerStyle={{ gap: 8 }}>
+              {[
+                { id: 'overview', label: 'Overview', icon: 'pie-chart-outline' },
+                { id: 'tax', label: 'Tax & Take-Home', icon: 'receipt-outline' },
+                { id: 'budget', label: '50/30/20 Rule', icon: 'calculator-outline' },
+                { id: 'fire', label: 'FIRE Freedom', icon: 'flame-outline' },
+                { id: 'peers', label: 'Global Cities', icon: 'globe-outline' },
+              ].map(t => (
+                <TouchableOpacity
+                  key={t.id}
+                  onPress={() => setResultTab(t.id)}
+                  style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F1F5F9' }, resultTab === t.id && { backgroundColor: C.primary }]}
+                >
+                  <Ionicons name={t.icon} size={15} color={resultTab === t.id ? '#FFF' : C.subtext} />
+                  <Text style={[{ fontSize: 13, fontWeight: '700', color: C.subtext }, resultTab === t.id && { color: '#FFF' }]}>
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-            {activeChart === 'breakdown' ? (
-              <BarChart data={data.breakdown} currency={currency} />
-            ) : (
-              <SavingsGauge savings={data.leftover_income} income={parseFloat(income) || 1} currency={currency} />
+            {/* TAB CONTENT */}
+            {resultTab === 'overview' && (
+              <>
+                {/* CHART SWITCHER */}
+                <View style={styles.chartSwitcher}>
+                  <TouchableOpacity 
+                    onPress={() => setActiveChart('breakdown')} 
+                    style={[styles.chartSwitchBtn, activeChart === 'breakdown' && styles.chartSwitchBtnActive]}
+                  >
+                    <Text style={[styles.chartSwitchText, activeChart === 'breakdown' && styles.chartSwitchTextActive]}>Breakdown</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => setActiveChart('gauge')} 
+                    style={[styles.chartSwitchBtn, activeChart === 'gauge' && styles.chartSwitchBtnActive]}
+                  >
+                    <Text style={[styles.chartSwitchText, activeChart === 'gauge' && styles.chartSwitchTextActive]}>Savings</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {activeChart === 'breakdown' ? (
+                  <BarChart data={data.breakdown} currency={currency} />
+                ) : (
+                  <SavingsGauge savings={data.leftover_income} income={parseFloat(income) || 1} currency={currency} />
+                )}
+              </>
+            )}
+
+            {resultTab === 'tax' && data?.tax_info && (
+              <View style={{ gap: 12 }}>
+                <View style={{ backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.border }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.muted, textTransform: 'uppercase' }}>Tax Jurisdiction</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: C.text, marginTop: 2 }}>{data.tax_info.notes || country}</Text>
+                  <Text style={{ fontSize: 12, color: C.primary, fontWeight: '700', marginTop: 4 }}>
+                    Effective Tax Rate: {data.tax_info.effective_rate}%
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1, backgroundColor: '#EFF6FF', padding: 14, borderRadius: 16 }}>
+                    <Text style={{ fontSize: 11, color: '#1E40AF', fontWeight: '700' }}>Gross Monthly</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#1E3A8A', marginTop: 4 }}>
+                      {fmtAmt(parseFloat(income || 0), currency)}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: '#FEF2F2', padding: 14, borderRadius: 16 }}>
+                    <Text style={{ fontSize: 11, color: '#991B1B', fontWeight: '700' }}>Est. Tax/Mo</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#991B1B', marginTop: 4 }}>
+                      -{fmtAmt(data.tax_info.monthly_tax, currency)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ backgroundColor: '#ECFDF5', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#A7F3D0' }}>
+                  <Text style={{ fontSize: 12, color: '#065F46', fontWeight: '800', textTransform: 'uppercase' }}>Net Take-Home Pay</Text>
+                  <Text style={{ fontSize: 24, fontWeight: '900', color: '#047857', marginTop: 4 }}>
+                    {fmtAmt(data.tax_info.net_monthly, currency)} <Text style={{ fontSize: 13, fontWeight: '600' }}>/ month</Text>
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#065F46', marginTop: 4 }}>
+                    Annual Net: {fmtAmt(data.tax_info.net_monthly * 12, currency)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {resultTab === 'budget' && data?.rule_50_30_20 && (
+              <View style={{ gap: 12 }}>
+                <Text style={{ fontSize: 14, color: C.subtext, fontWeight: '500', lineHeight: 20 }}>
+                  The 50/30/20 guideline divides your income into Needs, Wants, and Savings:
+                </Text>
+
+                <View style={{ backgroundColor: '#EFF6FF', padding: 14, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: '#2563EB' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E40AF' }}>Needs (50%)</Text>
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: '#1E3A8A', marginTop: 2 }}>
+                    {fmtAmt(data.rule_50_30_20.needs, currency)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 2 }}>Rent, utilities, groceries, transport, health</Text>
+                </View>
+
+                <View style={{ backgroundColor: '#F5F3FF', padding: 14, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: '#7C3AED' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#5B21B6' }}>Wants (30%)</Text>
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: '#4C1D95', marginTop: 2 }}>
+                    {fmtAmt(data.rule_50_30_20.wants, currency)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#8B5CF6', marginTop: 2 }}>Dining out, subscriptions, leisure, hobbies</Text>
+                </View>
+
+                <View style={{ backgroundColor: '#ECFDF5', padding: 14, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: '#10B981' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>Savings & Debt (20%)</Text>
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: '#047857', marginTop: 2 }}>
+                    {fmtAmt(data.rule_50_30_20.savings, currency)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#10B981', marginTop: 2 }}>Emergency fund, investments, extra debt payoff</Text>
+                </View>
+              </View>
+            )}
+
+            {resultTab === 'fire' && data?.fire_metrics && (
+              <View style={{ gap: 12 }}>
+                <View style={{ backgroundColor: '#FFFBEB', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#FDE68A' }}>
+                  <Text style={{ fontSize: 12, color: '#92400E', fontWeight: '800', textTransform: 'uppercase' }}>Financial Independence (FIRE Number)</Text>
+                  <Text style={{ fontSize: 26, fontWeight: '900', color: '#B45309', marginTop: 4 }}>
+                    {fmtAmt(data.fire_metrics.fire_target, currency)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#78350F', marginTop: 4 }}>
+                    Based on 25x annual living cost ({fmtAmt(data.monthly_cost * 12, currency)}). At this level, you can withdraw 4% annually forever.
+                  </Text>
+                </View>
+
+                <View style={{ backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.border }}>
+                  <Text style={{ fontSize: 11, color: C.muted, fontWeight: '800', textTransform: 'uppercase' }}>Years to Financial Freedom</Text>
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: data.fire_metrics.years_to_fire ? C.green : C.red, marginTop: 4 }}>
+                    {data.fire_metrics.years_to_fire ? `~${data.fire_metrics.years_to_fire} Years` : 'Requires positive surplus'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: C.subtext, marginTop: 4 }}>
+                    Annual Savings Potential: {fmtAmt(data.fire_metrics.annual_savings, currency)} / yr
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {resultTab === 'peers' && data?.purchasing_power_peers && (
+              <View style={{ gap: 10 }}>
+                <Text style={{ fontSize: 13, color: C.subtext, fontWeight: '600', marginBottom: 4 }}>
+                  What your salary equates to in equivalent purchasing power:
+                </Text>
+                {data.purchasing_power_peers.map((peer, idx) => (
+                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Ionicons name="location" size={18} color={C.primary} />
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{peer.city}</Text>
+                    </View>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: C.primary }}>
+                      {peer.currency} {peer.amount.toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             )}
 
             <View style={styles.insightBox}>

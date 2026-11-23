@@ -12,7 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useFinanceStore } from '../../store/useFinanceStore';
 import { theme } from '../../theme';
 import { formatCurrency } from '../../utils/currency';
-import { CategoryChart, TrendChart } from '../../components/NativeCharts';
+import { CategoryChart, TrendChart, MonthlyComparisonChart, BudgetPacingCard, AssetDistributionChart } from '../../components/NativeCharts';
 
 const CATEGORY_ICONS = {
   food: 'fast-food',
@@ -215,7 +215,7 @@ export default function HomeScreen() {
               </View>
             </TouchableOpacity>
             <TouchableOpacity 
-              onPress={() => setProfileModalVisible(true)}
+              onPress={() => router.push('/profile')}
               style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }}
             >
               <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
@@ -352,6 +352,11 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Asset & Net Worth Allocation Breakdown */}
+        {dashboard?.net_worth_composition && (
+          <AssetDistributionChart composition={dashboard.net_worth_composition} currency={user?.currency} />
+        )}
+
         {/* Daily Safe Spend Banner */}
         {dashboard?.daily_safe_spend !== undefined && (
           <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#EFF6FF', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#BFDBFE' }}>
@@ -369,6 +374,11 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color="#3B82F6" />
           </View>
+        )}
+
+        {/* Budget Pacing & Velocity Indicator */}
+        {dashboard?.budget_pacing && (
+          <BudgetPacingCard pacing={dashboard.budget_pacing} currency={user?.currency} />
         )}
 
         {/* Active Goals Card */}
@@ -484,6 +494,11 @@ export default function HomeScreen() {
           })()}
         </View>
 
+        {/* 6-Month Income vs Expenses Trend Chart */}
+        {dashboard?.monthly_trend?.length > 0 && (
+          <MonthlyComparisonChart data={dashboard.monthly_trend} currency={user?.currency} />
+        )}
+
          {/* Category breakdowns use native React Native views so they work in Expo Go. */}
          {dashboard?.spending_by_category?.length > 0 && (
            <CategoryChart title="Spending by Category" data={dashboard.spending_by_category} currency={user?.currency} />
@@ -585,7 +600,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 onPress={() => {
                   setProfileModalVisible(false);
-                  router.push('/(tabs)/profile');
+                  router.push('/profile');
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F3F4F6', padding: 14, borderRadius: 14 }}
               >

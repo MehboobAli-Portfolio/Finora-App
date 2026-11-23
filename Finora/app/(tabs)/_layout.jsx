@@ -121,9 +121,5 @@ export default function TabLayout() {
         focused
       }) => <TabIcon focused={focused} route="ai" />
     }} />
-      <Tabs.Screen name="profile" options={{
-      title: 'Profile',
-      href: null
-    }} />
     </Tabs>;
 }

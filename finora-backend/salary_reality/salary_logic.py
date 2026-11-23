@@ -105,6 +105,77 @@ def _get_ppp_factor(country):
 
 
 # ---------------------------------------------------------------------------
+# Tax Estimation Engine
+# ---------------------------------------------------------------------------
+
+def estimate_tax(country, annual_income, currency="USD"):
+    c = (country or "").lower()
+    tax = 0.0
+    notes = ""
+    if "pakistan" in c:
+        # Pakistan Salaried Tax Slabs (PKR)
+        if annual_income <= 600000:
+            tax = 0.0
+        elif annual_income <= 1200000:
+            tax = (annual_income - 600000) * 0.05
+        elif annual_income <= 2200000:
+            tax = 30000 + (annual_income - 1200000) * 0.15
+        elif annual_income <= 3200000:
+            tax = 180000 + (annual_income - 2200000) * 0.25
+        else:
+            tax = 430000 + (annual_income - 3200000) * 0.35
+        notes = "FBR Salaried Income Tax Slabs"
+    elif any(k in c for k in ["united arab emirates", "dubai", "saudi", "qatar", "kuwait", "oman", "bahrain"]):
+        tax = 0.0
+        notes = "0% Personal Income Tax Jurisdiction"
+    elif "united kingdom" in c:
+        taxable = max(0.0, annual_income - 12570)
+        if taxable <= 37700:
+            tax = taxable * 0.20
+        else:
+            tax = 37700 * 0.20 + (taxable - 37700) * 0.40
+        notes = "HMRC UK Income Tax"
+    elif "india" in c:
+        if annual_income <= 300000:
+            tax = 0.0
+        elif annual_income <= 600000:
+            tax = (annual_income - 300000) * 0.05
+        elif annual_income <= 900000:
+            tax = 15000 + (annual_income - 600000) * 0.10
+        elif annual_income <= 1200000:
+            tax = 45000 + (annual_income - 900000) * 0.15
+        elif annual_income <= 1500000:
+            tax = 90000 + (annual_income - 1200000) * 0.20
+        else:
+            tax = 150000 + (annual_income - 1500000) * 0.30
+        notes = "Indian Income Tax (New Regime)"
+    elif "united states" in c:
+        taxable = max(0.0, annual_income - 14600)
+        if taxable <= 11600:
+            tax = taxable * 0.10
+        elif taxable <= 47150:
+            tax = 1160 + (taxable - 11600) * 0.12
+        elif taxable <= 100525:
+            tax = 5426 + (taxable - 47150) * 0.22
+        else:
+            tax = 17168 + (taxable - 100525) * 0.24
+        notes = "US Federal Tax (Single Standard Deduction)"
+    else:
+        tax = max(0.0, annual_income * 0.15)
+        notes = "Estimated Progressive Average Rate (~15%)"
+
+    effective_rate = round((tax / annual_income * 100), 1) if annual_income > 0 else 0.0
+    net_annual = max(0.0, annual_income - tax)
+    return {
+        "annual_tax": round(tax, 2),
+        "monthly_tax": round(tax / 12, 2),
+        "net_monthly": round(net_annual / 12, 2),
+        "effective_rate": effective_rate,
+        "notes": notes,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main Analysis Engine
 # ---------------------------------------------------------------------------
 
@@ -175,7 +246,44 @@ def analyse_affordability(country, state, city, area, adults, children, income, 
     monthly_cost = tier_costs[affordable_tier]
     leftover = income_monthly - monthly_cost
 
-    # 7. Smart insight
+    # 7. Tax Estimation
+    annual_income = income_monthly * 12
+    tax_info = estimate_tax(country, annual_income, currency)
+
+    # 8. 50/30/20 Rule
+    rule_50_30_20 = {
+        "needs": round(income_monthly * 0.50, 2),
+        "wants": round(income_monthly * 0.30, 2),
+        "savings": round(income_monthly * 0.20, 2),
+    }
+
+    # 9. FIRE / Financial Freedom Calculation
+    annual_cost = monthly_cost * 12
+    fire_target = annual_cost * 25
+    annual_savings = max(0.0, leftover * 12)
+    fire_years = None
+    if annual_savings > 0:
+        import math
+        r = 0.07
+        try:
+            val = (fire_target * r / annual_savings) + 1
+            if val > 0:
+                fire_years = round(math.log(val) / math.log(1 + r), 1)
+        except Exception:
+            fire_years = None
+
+    # 10. Purchasing Power Peer Hubs
+    usd_income = income_monthly / user_rate if user_rate > 0 else income_monthly
+    user_ppp = ppp if ppp else 1.0
+    peers = [
+        {"city": "New York, USA", "currency": "USD", "amount": round((usd_income / user_ppp) * 1.0, 0)},
+        {"city": "London, UK", "currency": "GBP", "amount": round((usd_income / user_ppp) * 0.70, 0)},
+        {"city": "Dubai, UAE", "currency": "AED", "amount": round((usd_income / user_ppp) * 1.85, 0)},
+        {"city": "Toronto, Canada", "currency": "CAD", "amount": round((usd_income / user_ppp) * 1.26, 0)},
+        {"city": "Lahore, Pakistan", "currency": "PKR", "amount": round((usd_income / user_ppp) * 38.5, 0)},
+    ]
+
+    # 11. Smart insight
     if can_afford:
         insight = (f"With {currency} {round(income_monthly):,}/month in {city or country}, "
                    f"you can afford a {affordable_tier} lifestyle. "
@@ -197,4 +305,12 @@ def analyse_affordability(country, state, city, area, adults, children, income, 
         "breakdown": breakdown,
         "currency": currency.upper(),
         "tier_costs": {t: round(c, 0) for t, c in tier_costs.items()},
+        "tax_info": tax_info,
+        "rule_50_30_20": rule_50_30_20,
+        "fire_metrics": {
+            "fire_target": round(fire_target, 0),
+            "annual_savings": round(annual_savings, 0),
+            "years_to_fire": fire_years,
+        },
+        "purchasing_power_peers": peers,
     }
